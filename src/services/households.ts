@@ -35,6 +35,11 @@ export async function migrateChatId(oldChatId: number, newChatId: number): Promi
     .where(eq(households.tgChatId, oldChatId));
 }
 
+export async function getHouseholdById(id: string): Promise<Household | undefined> {
+  const [row] = await db().select().from(households).where(eq(households.id, id));
+  return row;
+}
+
 export async function listHouseholds(): Promise<Household[]> {
   return db().select().from(households).orderBy(households.createdAt);
 }
