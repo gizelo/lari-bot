@@ -5,7 +5,6 @@ import { categoriesComposer } from './handlers/categories';
 import { commandsComposer } from './handlers/commands';
 import { editComposer } from './handlers/edit';
 import { expenseComposer } from './handlers/expense';
-import { importComposer } from './handlers/import';
 import { membershipComposer } from './handlers/membership';
 import { privateComposer } from './handlers/private';
 
@@ -27,7 +26,6 @@ export function createBot(): Bot {
   group.use(membershipComposer);
   group.use(commandsComposer);
   group.use(categoriesComposer);
-  group.use(importComposer);
   group.use(callbacksComposer);
   group.use(editComposer);
   group.use(expenseComposer);
