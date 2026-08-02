@@ -1,12 +1,20 @@
 import { Composer, InlineKeyboard, InputFile, type Context } from 'grammy';
 import { config } from '../config';
-import type { Household } from '../db/schema';
+import type { Household, Member } from '../db/schema';
 import { todayIn } from '../domain/dates';
 import { esc, renderTransfers } from '../domain/formatting';
 import { formatMoney } from '../domain/money';
-import { listAllExpenses, listMonthExpenses, listRecentExpenses, type ExpenseRow } from '../services/expenses';
+import { parseAmountToMinor } from '../domain/money';
+import {
+  createExpense,
+  listAllExpenses,
+  listMonthExpenses,
+  listRecentExpenses,
+  setReplyMessageId,
+  type ExpenseRow,
+} from '../services/expenses';
 import { getOrCreateHousehold } from '../services/households';
-import { ensureMember, listActiveMembers } from '../services/members';
+import { ensureMember, listActiveMembers, listAllMembers } from '../services/members';
 import { balanceView, updatePinnedBalance } from '../services/render';
 import { displayName } from './expense';
 import { sendMembersPanel, welcomeChat } from './membership';
@@ -173,6 +181,39 @@ async function monthListView(
   return { text, keyboard: new InlineKeyboard().text('⬅️ К сводке', `ms:${ym}`) };
 }
 
+/** Создаёт «расчёт на паузе» и просит подтвердить кнопкой — тот же механизм, что крупные суммы. */
+async function proposeSettlement(
+  ctx: Context,
+  hh: Household,
+  from: Member,
+  to: Member,
+  amountMinor: number,
+): Promise<void> {
+  const symbol = config().CURRENCY_SYMBOL;
+  const created = await createExpense({
+    householdId: hh.id,
+    kind: 'settlement',
+    categoryId: null,
+    payerId: from.id,
+    amountMinor,
+    comment: to.displayName,
+    spentOn: todayIn(config().TZ),
+    createdByTgId: ctx.from?.id ?? 0,
+    pending: true,
+    shares: [{ memberId: to.id, shareMinor: amountMinor }],
+  });
+  if (!created) return;
+  const msg = await ctx.reply(
+    `Рассчитаться на ${formatMoney(amountMinor, symbol)}?\n${esc(from.displayName)} переводит ${esc(to.displayName)} ${formatMoney(amountMinor, symbol)}.`,
+    {
+      reply_markup: new InlineKeyboard()
+        .text('✅ Подтвердить', `ok:${created.id}`)
+        .text('✖️ Отмена', `x:${created.id}`),
+    },
+  );
+  await setReplyMessageId(created.id, msg.message_id);
+}
+
 export const commandsComposer = new Composer();
 const cmd = commandsComposer;
 
@@ -245,6 +286,42 @@ async function sendLast(ctx: Context): Promise<void> {
 cmd.command('last', sendLast);
 cmd.hears(/^последние$/iu, sendLast);
 
+async function settle(ctx: Context, arg?: string): Promise<void> {
+  const hh = await household(ctx);
+  const { transfers } = await balanceView(hh.id);
+  if (transfers.length === 0) {
+    await ctx.reply('Вы в расчёте 🎉');
+    return;
+  }
+  const all = await listAllMembers(hh.id);
+  const byId = new Map(all.map((m) => [m.id, m]));
+
+  if (arg) {
+    const amountMinor = parseAmountToMinor(arg);
+    if (!amountMinor) {
+      await ctx.reply('Не понял сумму. Пример: /settle 20');
+      return;
+    }
+    // Частичный расчёт делает должник: ищем перевод от вызвавшего команду.
+    const caller = all.find((m) => m.tgUserId === ctx.from?.id);
+    const mine = transfers.filter((t) => t.fromId === caller?.id);
+    if (!caller || mine.length === 0) {
+      await ctx.reply('Ты сейчас никому не должен — частичный расчёт не нужен.');
+      return;
+    }
+    const target = mine[0]!;
+    await proposeSettlement(ctx, hh, caller, byId.get(target.toId)!, amountMinor);
+    return;
+  }
+
+  for (const t of transfers) {
+    await proposeSettlement(ctx, hh, byId.get(t.fromId)!, byId.get(t.toId)!, t.amountMinor);
+  }
+}
+
+cmd.command('settle', async (ctx) => settle(ctx, ctx.match.trim() || undefined));
+cmd.hears(/^рассчитались$/iu, async (ctx) => settle(ctx));
+
 cmd.command('members', async (ctx) => {
   const hh = await household(ctx);
   await sendMembersPanel(ctx.api, hh);
@@ -293,6 +370,7 @@ const HELP = `Я считаю совместные расходы и делю и
 /balance — кто кому должен
 /month — сводка за месяц (или /month 07); кнопки под ней — списки по категориям и навигация по месяцам
 /last — последние 10 записей
+/settle — рассчитаться полностью, /settle 20 — частично
 /members — участники дележа
 /categories — категории этой группы
 /export — вся история в CSV
