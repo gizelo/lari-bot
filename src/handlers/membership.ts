@@ -28,7 +28,7 @@ export async function sendMembersPanel(api: Api, household: Household): Promise<
 
 const WELCOME = `Привет! Я Lari — считаю совместные расходы и делю их поровну.
 
-Внести расход — просто сообщение: <code>56 кафе</code>, <code>113 продукты карфур</code>, <code>вчера 20 такси</code>. Я отвечу балансом — кто кому сколько должен.
+Внести расход — просто сообщение: <code>67 кафе</code>, <code>113 продукты карфур</code>, <code>вчера 20 такси</code>. Я отвечу балансом — кто кому сколько должен.
 
 Команды: /balance, /month, /last, /settle, /help.
 

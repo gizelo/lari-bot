@@ -15,8 +15,8 @@ const parse = (text: string) => parseExpense(text, cats, today);
 
 describe('parseExpense', () => {
   it('распознаёт «сумма категория»', () => {
-    expect(parse('56 кафе')).toEqual({
-      amountMinor: 5600,
+    expect(parse('67 кафе')).toEqual({
+      amountMinor: 6700,
       spentOn: today,
       categoryId: 'cafe',
       ambiguousCategory: false,
@@ -26,12 +26,12 @@ describe('parseExpense', () => {
   });
 
   it('распознаёт обратный порядок «категория сумма»', () => {
-    expect(parse('кафе 56')).toMatchObject({ amountMinor: 5600, categoryId: 'cafe' });
+    expect(parse('кафе 67')).toMatchObject({ amountMinor: 6700, categoryId: 'cafe' });
   });
 
   it('принимает точку и запятую как разделитель копеек', () => {
-    expect(parse('56.5 продукты')).toMatchObject({ amountMinor: 5650, categoryId: 'products' });
-    expect(parse('56,5 продукты')).toMatchObject({ amountMinor: 5650, categoryId: 'products' });
+    expect(parse('67.5 продукты')).toMatchObject({ amountMinor: 6750, categoryId: 'products' });
+    expect(parse('67,5 продукты')).toMatchObject({ amountMinor: 6750, categoryId: 'products' });
   });
 
   it('остаток строки после категории становится комментарием', () => {
@@ -43,7 +43,7 @@ describe('parseExpense', () => {
   });
 
   it('голая сумма — расход без категории', () => {
-    expect(parse('56')).toMatchObject({ amountMinor: 5600, categoryId: null, ambiguousCategory: false });
+    expect(parse('67')).toMatchObject({ amountMinor: 6700, categoryId: null, ambiguousCategory: false });
   });
 
   it('дата дд.мм первым токеном', () => {
