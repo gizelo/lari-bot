@@ -48,62 +48,137 @@ function parseMonthArg(arg: string | undefined, tz: string): string | null {
   return null;
 }
 
-function renderMonthSummary(
-  ym: string,
-  rows: ExpenseRow[],
-  balanceText: string,
-  symbol: string,
-): string {
+function monthTitle(ym: string): string {
   const [year, month] = ym.split('-');
-  const title = `📊 <b>${MONTHS[Number(month) - 1]} ${year}</b>`;
+  return `${MONTHS[Number(month) - 1]} ${year}`;
+}
 
-  const spends = rows.filter((r) => r.kind === 'expense');
-  if (spends.length === 0) {
-    return `${title}\n\nЗа этот месяц записей нет.\n\n⚖️ Текущий баланс (за всё время):\n${balanceText}`;
-  }
+type MonthBucket = { key: string; label: string; total: number; byPayer: Map<string, number> };
 
-  type Bucket = { label: string; total: number; byPayer: Map<string, number> };
-  const buckets = new Map<string, Bucket>();
+function monthBuckets(spends: ExpenseRow[]): {
+  buckets: MonthBucket[];
+  total: number;
+  payerTotals: Map<string, number>;
+} {
+  const buckets = new Map<string, MonthBucket>();
   let total = 0;
   const payerTotals = new Map<string, number>();
-
   for (const r of spends) {
     const key = r.categoryId ?? 'none';
     const label = r.categoryName
-      ? `${r.categoryEmoji ? `${r.categoryEmoji} ` : ''}${esc(r.categoryName)}`
+      ? `${r.categoryEmoji ? `${r.categoryEmoji} ` : ''}${r.categoryName}`
       : '❓ Без категории';
-    const bucket = buckets.get(key) ?? { label, total: 0, byPayer: new Map() };
+    const bucket = buckets.get(key) ?? { key, label, total: 0, byPayer: new Map() };
     bucket.total += r.amountMinor;
     bucket.byPayer.set(r.payerName, (bucket.byPayer.get(r.payerName) ?? 0) + r.amountMinor);
     buckets.set(key, bucket);
     total += r.amountMinor;
     payerTotals.set(r.payerName, (payerTotals.get(r.payerName) ?? 0) + r.amountMinor);
   }
+  return { buckets: [...buckets.values()].sort((a, b) => b.total - a.total), total, payerTotals };
+}
 
-  const lines = [...buckets.values()]
-    .sort((a, b) => b.total - a.total)
-    .map((b) => {
-      const byPayer = [...b.byPayer.entries()]
-        .map(([name, sum]) => `${esc(name)} ${formatMoney(sum, symbol)}`)
-        .join(' · ');
-      return `${b.label} — <b>${formatMoney(b.total, symbol)}</b>\n      ${byPayer}`;
+function prevYm(ym: string): string {
+  const [y, m] = ym.split('-').map(Number);
+  return m === 1 ? `${y! - 1}-12` : `${y}-${String(m! - 1).padStart(2, '0')}`;
+}
+
+function nextYm(ym: string): string {
+  const [y, m] = ym.split('-').map(Number);
+  return m === 12 ? `${y! + 1}-01` : `${y}-${String(m! + 1).padStart(2, '0')}`;
+}
+
+const payerLine = (entries: Map<string, number>, symbol: string) =>
+  [...entries.entries()].map(([name, sum]) => `${esc(name)} ${formatMoney(sum, symbol)}`).join(' · ');
+
+async function monthSummaryView(
+  hh: Household,
+  ym: string,
+): Promise<{ text: string; keyboard: InlineKeyboard }> {
+  const cfg = config();
+  const symbol = cfg.CURRENCY_SYMBOL;
+  const [rows, { transfers, names }] = await Promise.all([
+    listMonthExpenses(hh.id, ym),
+    balanceView(hh.id),
+  ]);
+  const balanceText = renderTransfers(transfers, names, symbol);
+  const spends = rows.filter((r) => r.kind === 'expense');
+  const title = `📊 <b>${monthTitle(ym)}</b>`;
+
+  const kb = new InlineKeyboard();
+  let text: string;
+  if (spends.length === 0) {
+    text = `${title}\n\nЗа этот месяц записей нет.\n\n⚖️ Текущий баланс (за всё время):\n${balanceText}`;
+  } else {
+    const { buckets, total, payerTotals } = monthBuckets(spends);
+    const lines = buckets.map(
+      (b) =>
+        `${esc(b.label)} — <b>${formatMoney(b.total, symbol)}</b>\n      ${payerLine(b.byPayer, symbol)}`,
+    );
+    text = [
+      title,
+      '',
+      ...lines,
+      '─'.repeat(20),
+      `ИТОГО <b>${formatMoney(total, symbol)}</b> (${spends.length} записей)`,
+      `Заплатили: ${payerLine(payerTotals, symbol)}`,
+      '',
+      '⚖️ Текущий баланс (за всё время):',
+      balanceText,
+    ].join('\n');
+
+    buckets.forEach((b, i) => {
+      kb.text(b.label, `mc:${ym}:${b.key}`);
+      if (i % 2 === 1) kb.row();
     });
+    kb.row().text('📋 Все записи', `ml:${ym}`).row();
+  }
+  kb.text(`← ${monthTitle(prevYm(ym)).split(' ')[0]}`, `ms:${prevYm(ym)}`);
+  if (ym < todayIn(cfg.TZ).slice(0, 7)) {
+    kb.text(`${monthTitle(nextYm(ym)).split(' ')[0]} →`, `ms:${nextYm(ym)}`);
+  }
+  return { text, keyboard: kb };
+}
 
-  const paid = [...payerTotals.entries()]
-    .map(([name, sum]) => `${esc(name)} ${formatMoney(sum, symbol)}`)
-    .join(' · ');
+const MAX_LIST_LINES = 50;
 
-  return [
-    title,
+async function monthListView(
+  hh: Household,
+  ym: string,
+  categoryKey: string | null,
+): Promise<{ text: string; keyboard: InlineKeyboard }> {
+  const symbol = config().CURRENCY_SYMBOL;
+  const all = (await listMonthExpenses(hh.id, ym)).filter((r) => r.kind === 'expense');
+  const rows =
+    categoryKey === null
+      ? all
+      : all.filter((r) => (r.categoryId ?? 'none') === categoryKey);
+
+  const header =
+    categoryKey === null
+      ? `📋 <b>${monthTitle(ym)}</b> — все записи`
+      : `${esc(rows[0]?.categoryName ?? 'Без категории')} — <b>${monthTitle(ym)}</b>`;
+
+  const total = rows.reduce((acc, r) => acc + r.amountMinor, 0);
+  const byPayer = new Map<string, number>();
+  for (const r of rows) byPayer.set(r.payerName, (byPayer.get(r.payerName) ?? 0) + r.amountMinor);
+
+  const lines = rows.slice(0, MAX_LIST_LINES).map((r) => {
+    const date = `${r.spentOn.slice(8, 10)}.${r.spentOn.slice(5, 7)}`;
+    const cat = categoryKey === null ? ` · ${r.categoryEmoji ?? r.categoryName ?? '❓'}` : '';
+    const comment = r.comment ? ` · ${esc(r.comment)}` : '';
+    return `${date} · <b>${formatMoney(r.amountMinor, symbol)}</b>${cat} · ${esc(r.payerName)}${comment}`;
+  });
+  if (rows.length > MAX_LIST_LINES) lines.push(`… и ещё ${rows.length - MAX_LIST_LINES}`);
+
+  const text = [
+    header,
+    `Всего <b>${formatMoney(total, symbol)}</b> (${rows.length} записей) · ${payerLine(byPayer, symbol)}`,
     '',
-    ...lines,
-    '─'.repeat(20),
-    `ИТОГО <b>${formatMoney(total, symbol)}</b>`,
-    `Заплатили: ${paid}`,
-    '',
-    '⚖️ Текущий баланс (за всё время):',
-    balanceText,
+    ...(lines.length > 0 ? lines : ['Записей нет.']),
   ].join('\n');
+
+  return { text, keyboard: new InlineKeyboard().text('⬅️ К сводке', `ms:${ym}`) };
 }
 
 /** Создаёт «расчёт на паузе» и просит подтвердить кнопкой — тот же механизм, что крупные суммы. */
@@ -151,22 +226,36 @@ cmd.command('balance', sendBalance);
 cmd.hears(/^баланс$/iu, sendBalance);
 
 async function sendMonth(ctx: Context, arg?: string): Promise<void> {
-  const cfg = config();
-  const ym = parseMonthArg(arg, cfg.TZ);
+  const ym = parseMonthArg(arg, config().TZ);
   if (!ym) {
     await ctx.reply('Не понял месяц. Форматы: /month, /month 07, /month 2026-07');
     return;
   }
   const hh = await household(ctx);
-  const [rows, { transfers, names }] = await Promise.all([
-    listMonthExpenses(hh.id, ym),
-    balanceView(hh.id),
-  ]);
-  const balanceText = renderTransfers(transfers, names, cfg.CURRENCY_SYMBOL);
-  await ctx.reply(renderMonthSummary(ym, rows, balanceText, cfg.CURRENCY_SYMBOL), {
-    parse_mode: 'HTML',
-  });
+  const { text, keyboard } = await monthSummaryView(hh, ym);
+  await ctx.reply(text, { parse_mode: 'HTML', reply_markup: keyboard });
 }
+
+cmd.callbackQuery(/^ms:(\d{4}-\d{2})$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const hh = await household(ctx);
+  const { text, keyboard } = await monthSummaryView(hh, ctx.match[1]!);
+  await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: keyboard }).catch(() => {});
+});
+
+cmd.callbackQuery(/^ml:(\d{4}-\d{2})$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const hh = await household(ctx);
+  const { text, keyboard } = await monthListView(hh, ctx.match[1]!, null);
+  await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: keyboard }).catch(() => {});
+});
+
+cmd.callbackQuery(/^mc:(\d{4}-\d{2}):(.+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const hh = await household(ctx);
+  const { text, keyboard } = await monthListView(hh, ctx.match[1]!, ctx.match[2]!);
+  await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: keyboard }).catch(() => {});
+});
 
 cmd.command('month', async (ctx) => sendMonth(ctx, ctx.match.trim() || undefined));
 cmd.hears(/^(итого|месяц)$/iu, async (ctx) => sendMonth(ctx));
@@ -279,7 +368,7 @@ const HELP = `Я считаю совместные расходы и делю и
 
 <b>Команды</b>
 /balance — кто кому должен
-/month — сводка за месяц (или /month 07)
+/month — сводка за месяц (или /month 07); кнопки под ней — списки по категориям и навигация по месяцам
 /last — последние 10 записей
 /settle — рассчитаться полностью, /settle 20 — частично
 /members — участники дележа
