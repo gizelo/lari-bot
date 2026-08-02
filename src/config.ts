@@ -7,7 +7,19 @@ const envSchema = z.object({
   DATABASE_URL: z
     .string()
     .min(1, 'DATABASE_URL обязателен (Supabase transaction pooler, порт 6543)'),
-  TZ: z.string().default('Asia/Tbilisi'),
+  // Vercel подставляет системную TZ=':UTC' — Intl такое не принимает, чистим и валидируем.
+  TZ: z
+    .string()
+    .default('Asia/Tbilisi')
+    .transform((tz) => {
+      const cleaned = tz.replace(/^:/, '');
+      try {
+        new Intl.DateTimeFormat('en', { timeZone: cleaned });
+        return cleaned === 'UTC' ? 'Asia/Tbilisi' : cleaned;
+      } catch {
+        return 'Asia/Tbilisi';
+      }
+    }),
   DEFAULT_CURRENCY: z.string().default('GEL'),
   CURRENCY_SYMBOL: z.string().default('₾'),
 });
