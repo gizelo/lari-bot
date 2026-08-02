@@ -1,11 +1,13 @@
 import { Bot } from 'grammy';
 import { config } from './config';
 import { callbacksComposer } from './handlers/callbacks';
+import { categoriesComposer } from './handlers/categories';
 import { commandsComposer } from './handlers/commands';
 import { editComposer } from './handlers/edit';
 import { expenseComposer } from './handlers/expense';
+import { importComposer } from './handlers/import';
 import { membershipComposer } from './handlers/membership';
-import { adminComposer } from './handlers/admin';
+import { privateComposer } from './handlers/private';
 
 let cached: Bot | undefined;
 
@@ -17,14 +19,15 @@ export function createBot(): Bot {
     console.error('Ошибка обработки апдейта', err.error);
   });
 
-  // Личка: админка (категории, CSV-импорт) и справка.
-  const priv = bot.chatType('private');
-  priv.use(adminComposer);
+  // Личка — только справка: все данные и настройки живут в группах.
+  bot.chatType('private').use(privateComposer);
 
-  // Группы: каждая получает свой независимый household.
+  // Группы: каждая получает свой независимый household (траты, категории, история).
   const group = bot.chatType(['group', 'supergroup']);
   group.use(membershipComposer);
   group.use(commandsComposer);
+  group.use(categoriesComposer);
+  group.use(importComposer);
   group.use(callbacksComposer);
   group.use(editComposer);
   group.use(expenseComposer);

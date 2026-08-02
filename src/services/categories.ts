@@ -1,17 +1,41 @@
-import { asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { categories, type Category } from '../db/schema';
 
-export async function listActiveCategories(): Promise<Category[]> {
+export const DEFAULT_CATEGORIES = [
+  { name: 'Продукты', aliases: ['продукты', 'еда', 'магазин', 'супермаркет', 'магаз'], emoji: '🛒' },
+  {
+    name: 'Кафе/рестораны',
+    aliases: ['кафе', 'ресторан', 'рестик', 'кофе', 'бар', 'доставка'],
+    emoji: '🍽',
+  },
+  { name: 'Транспорт', aliases: ['транспорт', 'такси', 'метро', 'бензин', 'автобус'], emoji: '🚕' },
+  { name: 'Развлечения', aliases: ['развлечения', 'кино', 'досуг', 'концерт'], emoji: '🎬' },
+  { name: 'Дом/быт', aliases: ['дом', 'быт', 'хозтовары', 'химия', 'ремонт'], emoji: '🏠' },
+  { name: 'Прочее', aliases: ['прочее', 'другое', 'разное'], emoji: '📦' },
+];
+
+export async function seedDefaultCategories(householdId: string): Promise<void> {
+  await db()
+    .insert(categories)
+    .values(DEFAULT_CATEGORIES.map((c, position) => ({ ...c, householdId, position })))
+    .onConflictDoNothing();
+}
+
+export async function listActiveCategories(householdId: string): Promise<Category[]> {
   return db()
     .select()
     .from(categories)
-    .where(eq(categories.isArchived, false))
+    .where(and(eq(categories.householdId, householdId), eq(categories.isArchived, false)))
     .orderBy(asc(categories.position));
 }
 
-export async function listAllCategories(): Promise<Category[]> {
-  return db().select().from(categories).orderBy(asc(categories.position));
+export async function listAllCategories(householdId: string): Promise<Category[]> {
+  return db()
+    .select()
+    .from(categories)
+    .where(eq(categories.householdId, householdId))
+    .orderBy(asc(categories.position));
 }
 
 export async function getCategory(id: string): Promise<Category | undefined> {
@@ -19,15 +43,16 @@ export async function getCategory(id: string): Promise<Category | undefined> {
   return row;
 }
 
-export async function createCategory(name: string): Promise<Category | null> {
+export async function createCategory(householdId: string, name: string): Promise<Category | null> {
   const rows = await db()
     .select({ max: sql<number>`coalesce(max(${categories.position}), 0)` })
-    .from(categories);
+    .from(categories)
+    .where(eq(categories.householdId, householdId));
   const max = rows[0]?.max ?? 0;
   const [created] = await db()
     .insert(categories)
     // Название автоматически становится первым алиасом.
-    .values({ name, aliases: [name.toLowerCase()], position: max + 1 })
+    .values({ householdId, name, aliases: [name.toLowerCase()], position: max + 1 })
     .onConflictDoNothing()
     .returning();
   return created ?? null;

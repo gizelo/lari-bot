@@ -33,7 +33,7 @@ editComposer.on('edited_message:text', async (ctx) => {
   }
   if (existing.kind !== 'expense') return;
 
-  const parsed = await parseGroupMessage(text);
+  const parsed = await parseGroupMessage(household.id, text);
 
   if (!parsed) {
     await softDeleteExpense(existing.id);

@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { db } from '../db/client';
 import { households, type Household } from '../db/schema';
+import { seedDefaultCategories } from './categories';
 
 export async function getOrCreateHousehold(tgChatId: number, title: string): Promise<Household> {
   const [existing] = await db().select().from(households).where(eq(households.tgChatId, tgChatId));
@@ -15,7 +16,10 @@ export async function getOrCreateHousehold(tgChatId: number, title: string): Pro
     .values({ tgChatId, title })
     .onConflictDoNothing()
     .returning();
-  if (created) return created;
+  if (created) {
+    await seedDefaultCategories(created.id);
+    return created;
+  }
   // Гонка двух апдейтов: запись уже вставлена параллельной инвокацией.
   const [row] = await db().select().from(households).where(eq(households.tgChatId, tgChatId));
   return row!;

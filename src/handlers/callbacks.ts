@@ -69,7 +69,8 @@ callbacksComposer.callbackQuery(/^x:(.+)$/, async (ctx) => {
 
 callbacksComposer.callbackQuery(/^c:(.+)$/, async (ctx) => {
   await ctx.answerCallbackQuery();
-  const kb = await categoryPickerKeyboard(ctx.match[1]!);
+  const hh = await household(ctx);
+  const kb = await categoryPickerKeyboard(hh.id, ctx.match[1]!);
   await ctx.editMessageReplyMarkup({ reply_markup: kb }).catch(() => {});
 });
 

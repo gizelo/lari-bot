@@ -18,8 +18,11 @@ export function displayName(from: { first_name: string; username?: string }): st
   return from.first_name || from.username || 'Без имени';
 }
 
-export async function parseGroupMessage(text: string): Promise<ParsedExpense | null> {
-  const categories = await listActiveCategories();
+export async function parseGroupMessage(
+  householdId: string,
+  text: string,
+): Promise<ParsedExpense | null> {
+  const categories = await listActiveCategories(householdId);
   return parseExpense(
     text,
     categories.map((c) => ({ id: c.id, name: c.name, aliases: c.aliases })),
@@ -33,10 +36,10 @@ export async function handleNewExpense(ctx: Context, messageId: number, text: st
   const from = ctx.from;
   if (!chat || !from || from.is_bot) return;
 
-  const parsed = await parseGroupMessage(text);
+  const household = await getOrCreateHousehold(chat.id, chat.title ?? 'Группа');
+  const parsed = await parseGroupMessage(household.id, text);
   if (!parsed) return; // не расход — молчим полностью
 
-  const household = await getOrCreateHousehold(chat.id, chat.title ?? 'Группа');
   const payer = await ensureMember(household.id, from.id, displayName(from));
   const active = await listActiveMembers(household.id);
   const shares = splitEqually(

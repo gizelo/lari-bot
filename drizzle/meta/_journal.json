@@ -8,6 +8,13 @@
       "when": 1785585613173,
       "tag": "0000_salty_tempest",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1785655332467,
+      "tag": "0001_fine_annihilus",
+      "breakpoints": true
     }
   ]
 }

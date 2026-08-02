@@ -38,11 +38,14 @@ export const members = pgTable(
   (t) => [uniqueIndex('members_household_user_idx').on(t.householdId, t.tgUserId)],
 );
 
-// Глобальные для всех групп, управляются только админом из лички.
+// У каждой группы свой набор категорий; дефолтные сеются при создании household.
 export const categories = pgTable(
   'categories',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    householdId: uuid('household_id')
+      .notNull()
+      .references(() => households.id),
     name: text('name').notNull(),
     aliases: text('aliases').array().notNull().default(sql`'{}'::text[]`),
     emoji: text('emoji'),
@@ -50,7 +53,7 @@ export const categories = pgTable(
     isArchived: boolean('is_archived').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex('categories_lower_name_idx').on(sql`lower(${t.name})`)],
+  (t) => [uniqueIndex('categories_household_lower_name_idx').on(t.householdId, sql`lower(${t.name})`)],
 );
 
 export const expenses = pgTable(

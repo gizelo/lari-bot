@@ -7,9 +7,6 @@ const envSchema = z.object({
   DATABASE_URL: z
     .string()
     .min(1, 'DATABASE_URL обязателен (Supabase transaction pooler, порт 6543)'),
-  ADMIN_TG_ID: z.coerce.number().int().positive({
-    message: 'ADMIN_TG_ID обязателен: tg user id админа (бот покажет его на /start в личке)',
-  }),
   TZ: z.string().default('Asia/Tbilisi'),
   DEFAULT_CURRENCY: z.string().default('GEL'),
   CURRENCY_SYMBOL: z.string().default('₾'),

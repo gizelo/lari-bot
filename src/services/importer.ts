@@ -57,7 +57,7 @@ export async function importCsvRows(
     return { inserted: 0, skippedDuplicates: 0, createdCategories: [], unknownPayers: unknown };
   }
 
-  const cats = await listAllCategories();
+  const cats = await listAllCategories(householdId);
   const catByAlias = new Map<string, string>();
   for (const c of cats) {
     catByAlias.set(norm(c.name), c.id);
@@ -90,7 +90,7 @@ export async function importCsvRows(
 
     let categoryId = catByAlias.get(norm(row.categoryName));
     if (!categoryId) {
-      const created = await createCategory(row.categoryName.trim());
+      const created = await createCategory(householdId, row.categoryName.trim());
       if (created) {
         categoryId = created.id;
         catByAlias.set(norm(created.name), created.id);

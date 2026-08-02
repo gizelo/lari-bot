@@ -39,9 +39,10 @@ export function toExpenseView(row: ExpenseRow): ExpenseView {
 }
 
 export async function categoryPickerKeyboard(
+  householdId: string,
   expenseIdForBack?: string,
 ): Promise<InlineKeyboard> {
-  const cats = await listActiveCategories();
+  const cats = await listActiveCategories(householdId);
   const kb = new InlineKeyboard();
   cats.forEach((c, i) => {
     kb.text(`${c.emoji ? `${c.emoji} ` : ''}${c.name}`, `cs:${c.id}`);
@@ -56,7 +57,7 @@ export async function expenseKeyboard(row: ExpenseRow): Promise<InlineKeyboard> 
   if (row.deletedAt !== null) return new InlineKeyboard().text('↩️ Вернуть', `r:${row.id}`);
   if (row.kind === 'settlement') return new InlineKeyboard().text('🗑 Удалить', `d:${row.id}`);
   if (!row.categoryId) {
-    const kb = await categoryPickerKeyboard();
+    const kb = await categoryPickerKeyboard(row.householdId);
     return kb.text('🗑 Удалить', `d:${row.id}`);
   }
   return new InlineKeyboard()
