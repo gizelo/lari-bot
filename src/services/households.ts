@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
-import { db } from '../db/client';
-import { households, type Household } from '../db/schema';
-import { seedDefaultCategories } from './categories';
+import { db } from '../db/client.js';
+import { households, type Household } from '../db/schema.js';
+import { seedDefaultCategories } from './categories.js';
 
 export async function getOrCreateHousehold(tgChatId: number, title: string): Promise<Household> {
   const [existing] = await db().select().from(households).where(eq(households.tgChatId, tgChatId));

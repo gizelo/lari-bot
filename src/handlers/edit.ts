@@ -1,21 +1,21 @@
 import { Composer, InlineKeyboard } from 'grammy';
-import { config } from '../config';
-import { renderConfirmRequest } from '../domain/formatting';
-import { splitEqually } from '../domain/split';
+import { config } from '../config.js';
+import { renderConfirmRequest } from '../domain/formatting.js';
+import { splitEqually } from '../domain/split.js';
 import {
   findByMessageId,
   getExpenseRow,
   getShares,
   softDeleteExpense,
   updateParsedExpense,
-} from '../services/expenses';
-import { getOrCreateHousehold } from '../services/households';
-import { handleNewExpense, parseGroupMessage } from './expense';
+} from '../services/expenses.js';
+import { getOrCreateHousehold } from '../services/households.js';
+import { handleNewExpense, parseGroupMessage } from './expense.js';
 import {
   refreshExpenseReply,
   toExpenseView,
   updatePinnedBalance,
-} from '../services/render';
+} from '../services/render.js';
 
 export const editComposer = new Composer();
 

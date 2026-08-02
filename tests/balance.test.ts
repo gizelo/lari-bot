@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { computeNets, simplifyDebts, type BalanceEntry } from '../src/domain/balance';
-import { splitEqually } from '../src/domain/split';
+import { computeNets, simplifyDebts, type BalanceEntry } from '../src/domain/balance.js';
+import { splitEqually } from '../src/domain/split.js';
 
 function expense(payerId: string, amountMinor: number, participants: string[]): BalanceEntry {
   return {

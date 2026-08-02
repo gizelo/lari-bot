@@ -1,12 +1,12 @@
 import { Bot } from 'grammy';
-import { config } from './config';
-import { callbacksComposer } from './handlers/callbacks';
-import { categoriesComposer } from './handlers/categories';
-import { commandsComposer } from './handlers/commands';
-import { editComposer } from './handlers/edit';
-import { expenseComposer } from './handlers/expense';
-import { membershipComposer } from './handlers/membership';
-import { privateComposer } from './handlers/private';
+import { config } from './config.js';
+import { callbacksComposer } from './handlers/callbacks.js';
+import { categoriesComposer } from './handlers/categories.js';
+import { commandsComposer } from './handlers/commands.js';
+import { editComposer } from './handlers/edit.js';
+import { expenseComposer } from './handlers/expense.js';
+import { membershipComposer } from './handlers/membership.js';
+import { privateComposer } from './handlers/private.js';
 
 let cached: Bot | undefined;
 

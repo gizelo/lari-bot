@@ -1,18 +1,18 @@
 import { Composer, InlineKeyboard, type Context } from 'grammy';
-import { config } from '../config';
-import { todayIn } from '../domain/dates';
-import { renderConfirmRequest } from '../domain/formatting';
-import { parseExpense, type ParsedExpense } from '../domain/parser';
-import { splitEqually } from '../domain/split';
-import { listActiveCategories } from '../services/categories';
+import { config } from '../config.js';
+import { todayIn } from '../domain/dates.js';
+import { renderConfirmRequest } from '../domain/formatting.js';
+import { parseExpense, type ParsedExpense } from '../domain/parser.js';
+import { splitEqually } from '../domain/split.js';
+import { listActiveCategories } from '../services/categories.js';
 import {
   createExpense,
   getExpenseRow,
   setReplyMessageId,
-} from '../services/expenses';
-import { getOrCreateHousehold } from '../services/households';
-import { ensureMember, listActiveMembers, touchDisplayName } from '../services/members';
-import { renderExpenseMessage, toExpenseView, updatePinnedBalance } from '../services/render';
+} from '../services/expenses.js';
+import { getOrCreateHousehold } from '../services/households.js';
+import { ensureMember, listActiveMembers, touchDisplayName } from '../services/members.js';
+import { renderExpenseMessage, toExpenseView, updatePinnedBalance } from '../services/render.js';
 
 export function displayName(from: { first_name: string; username?: string }): string {
   return from.first_name || from.username || 'Без имени';

@@ -1,6 +1,6 @@
 import { and, asc, eq, sql } from 'drizzle-orm';
-import { db } from '../db/client';
-import { categories, type Category } from '../db/schema';
+import { db } from '../db/client.js';
+import { categories, type Category } from '../db/schema.js';
 
 export const DEFAULT_CATEGORIES = [
   { name: 'Продукты', aliases: ['продукты', 'еда', 'магазин', 'супермаркет', 'магаз'], emoji: '🛒' },

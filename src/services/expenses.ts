@@ -1,8 +1,8 @@
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
-import type { BalanceEntry } from '../domain/balance';
-import type { Share } from '../domain/split';
-import { db } from '../db/client';
-import { categories, expenseShares, expenses, members, type Expense } from '../db/schema';
+import type { BalanceEntry } from '../domain/balance.js';
+import type { Share } from '../domain/split.js';
+import { db } from '../db/client.js';
+import { categories, expenseShares, expenses, members, type Expense } from '../db/schema.js';
 
 export type NewExpense = {
   householdId: string;

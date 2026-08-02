@@ -1,20 +1,20 @@
 import type { Api } from 'grammy';
 import { InlineKeyboard } from 'grammy';
-import { config } from '../config';
-import type { Household } from '../db/schema';
-import { shiftDays, todayIn } from '../domain/dates';
-import type { Transfer } from '../domain/balance';
-import { computeNets, simplifyDebts } from '../domain/balance';
+import { config } from '../config.js';
+import type { Household } from '../db/schema.js';
+import { shiftDays, todayIn } from '../domain/dates.js';
+import type { Transfer } from '../domain/balance.js';
+import { computeNets, simplifyDebts } from '../domain/balance.js';
 import {
   renderExpenseReply,
   renderPinned,
   type ExpenseView,
   type MemberNames,
-} from '../domain/formatting';
-import { listActiveCategories } from './categories';
-import { setPinnedMessage } from './households';
-import { listAllMembers, memberNames } from './members';
-import { loadBalanceEntries, type ExpenseRow } from './expenses';
+} from '../domain/formatting.js';
+import { listActiveCategories } from './categories.js';
+import { setPinnedMessage } from './households.js';
+import { listAllMembers, memberNames } from './members.js';
+import { loadBalanceEntries, type ExpenseRow } from './expenses.js';
 
 export type BalanceView = { transfers: Transfer[]; names: MemberNames };
 

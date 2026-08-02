@@ -1,10 +1,10 @@
 import { Composer, InlineKeyboard, InputFile, type Context } from 'grammy';
-import { config } from '../config';
-import type { Household, Member } from '../db/schema';
-import { todayIn } from '../domain/dates';
-import { esc, renderTransfers } from '../domain/formatting';
-import { formatMoney } from '../domain/money';
-import { parseAmountToMinor } from '../domain/money';
+import { config } from '../config.js';
+import type { Household, Member } from '../db/schema.js';
+import { todayIn } from '../domain/dates.js';
+import { esc, renderTransfers } from '../domain/formatting.js';
+import { formatMoney } from '../domain/money.js';
+import { parseAmountToMinor } from '../domain/money.js';
 import {
   createExpense,
   listAllExpenses,
@@ -12,12 +12,12 @@ import {
   listRecentExpenses,
   setReplyMessageId,
   type ExpenseRow,
-} from '../services/expenses';
-import { getOrCreateHousehold } from '../services/households';
-import { ensureMember, listActiveMembers, listAllMembers } from '../services/members';
-import { balanceView, updatePinnedBalance } from '../services/render';
-import { displayName } from './expense';
-import { sendMembersPanel, welcomeChat } from './membership';
+} from '../services/expenses.js';
+import { getOrCreateHousehold } from '../services/households.js';
+import { ensureMember, listActiveMembers, listAllMembers } from '../services/members.js';
+import { balanceView, updatePinnedBalance } from '../services/render.js';
+import { displayName } from './expense.js';
+import { sendMembersPanel, welcomeChat } from './membership.js';
 
 const MONTHS = [
   'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',

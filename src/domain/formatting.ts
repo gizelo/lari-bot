@@ -1,5 +1,5 @@
-import type { Transfer } from './balance';
-import { formatMoney } from './money';
+import type { Transfer } from './balance.js';
+import { formatMoney } from './money.js';
 
 // Все сообщения бота — HTML parse mode; пользовательский текст всегда через esc().
 export function esc(s: string): string {

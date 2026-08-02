@@ -1,5 +1,5 @@
 import { defineConfig } from 'drizzle-kit';
-import { loadDotenv } from './src/env';
+import { loadDotenv } from './src/env.js';
 
 loadDotenv();
 

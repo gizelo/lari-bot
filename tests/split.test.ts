@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { splitEqually } from '../src/domain/split';
+import { splitEqually } from '../src/domain/split.js';
 
 const shareOf = (shares: ReturnType<typeof splitEqually>, id: string) =>
   shares.find((s) => s.memberId === id)!.shareMinor;

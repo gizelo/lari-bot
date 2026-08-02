@@ -1,7 +1,7 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
-import { config } from '../config';
-import * as schema from './schema';
+import { config } from '../config.js';
+import * as schema from './schema.js';
 
 // Transaction pooler Supabase (порт 6543) не поддерживает prepared statements.
 // Клиент кэшируется в module scope — переиспользуется между инвокациями serverless.

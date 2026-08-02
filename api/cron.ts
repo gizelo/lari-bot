@@ -1,10 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Api } from 'grammy';
-import { config } from '../src/config';
-import { todayIn } from '../src/domain/dates';
-import { monthSummaryView, prevYm } from '../src/handlers/commands';
-import { listMonthExpenses } from '../src/services/expenses';
-import { listHouseholds } from '../src/services/households';
+import { config } from '../src/config.js';
+import { todayIn } from '../src/domain/dates.js';
+import { monthSummaryView, prevYm } from '../src/handlers/commands.js';
+import { listMonthExpenses } from '../src/services/expenses.js';
+import { listHouseholds } from '../src/services/households.js';
 
 // Ежемесячная автосводка: 1-го числа бот постит в каждую активную группу
 // итог прошлого месяца (расписание — в vercel.json, время в UTC).

@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { webhookCallback } from 'grammy';
-import { createBot } from '../src/bot';
+import { createBot } from '../src/bot.js';
 
 let webhookHandler: ((req: VercelRequest, res: VercelResponse) => Promise<unknown>) | undefined;
 

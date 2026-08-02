@@ -1,5 +1,5 @@
 import { Api } from 'grammy';
-import { loadDotenv } from '../src/env';
+import { loadDotenv } from '../src/env.js';
 
 loadDotenv();
 

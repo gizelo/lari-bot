@@ -1,5 +1,5 @@
-import { isValidDate, shiftDays } from './dates';
-import { parseAmountToMinor } from './money';
+import { isValidDate, shiftDays } from './dates.js';
+import { parseAmountToMinor } from './money.js';
 
 export type ParserCategory = {
   id: string;

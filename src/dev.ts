@@ -1,7 +1,7 @@
-import { loadDotenv } from './env';
+import { loadDotenv } from './env.js';
 loadDotenv();
 
-const { createBot } = await import('./bot');
+const { createBot } = await import('./bot.js');
 
 const bot = createBot();
 console.log('Lari запускается на long polling…');

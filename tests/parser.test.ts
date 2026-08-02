@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseExpense, type ParserCategory } from '../src/domain/parser';
+import { parseExpense, type ParserCategory } from '../src/domain/parser.js';
 
 const cats: ParserCategory[] = [
   { id: 'products', name: 'Продукты', aliases: ['продукты', 'еда', 'магазин', 'супермаркет', 'магаз'] },

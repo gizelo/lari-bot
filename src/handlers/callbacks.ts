@@ -6,17 +6,17 @@ import {
   setExpenseCategory,
   setExpenseSpentOn,
   softDeleteExpense,
-} from '../services/expenses';
-import { getOrCreateHousehold } from '../services/households';
-import { deactivateMember, ensureMember } from '../services/members';
+} from '../services/expenses.js';
+import { getOrCreateHousehold } from '../services/households.js';
+import { deactivateMember, ensureMember } from '../services/members.js';
 import {
   categoryPickerKeyboard,
   datePickerKeyboard,
   refreshExpenseReply,
   updatePinnedBalance,
-} from '../services/render';
-import { displayName } from './expense';
-import { renderMembersPanel } from './membership';
+} from '../services/render.js';
+import { displayName } from './expense.js';
+import { renderMembersPanel } from './membership.js';
 
 export const callbacksComposer = new Composer();
 

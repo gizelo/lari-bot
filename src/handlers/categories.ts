@@ -1,5 +1,5 @@
 import { Composer, InlineKeyboard, type Context } from 'grammy';
-import { esc } from '../domain/formatting';
+import { esc } from '../domain/formatting.js';
 import {
   createCategory,
   getCategory,
@@ -8,8 +8,8 @@ import {
   setCategoryAliases,
   setCategoryArchived,
   setCategoryEmoji,
-} from '../services/categories';
-import { getOrCreateHousehold } from '../services/households';
+} from '../services/categories.js';
+import { getOrCreateHousehold } from '../services/households.js';
 
 export const categoriesComposer = new Composer();
 

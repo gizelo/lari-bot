@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
-import { db } from '../db/client';
-import { members, type Member } from '../db/schema';
+import { db } from '../db/client.js';
+import { members, type Member } from '../db/schema.js';
 
 export async function ensureMember(
   householdId: string,

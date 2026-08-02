@@ -1,9 +1,9 @@
 import { Composer, InlineKeyboard, type Api } from 'grammy';
-import { esc } from '../domain/formatting';
-import type { Household } from '../db/schema';
-import { getOrCreateHousehold, migrateChatId } from '../services/households';
-import { deactivateMember, listActiveMembers } from '../services/members';
-import { updatePinnedBalance } from '../services/render';
+import { esc } from '../domain/formatting.js';
+import type { Household } from '../db/schema.js';
+import { getOrCreateHousehold, migrateChatId } from '../services/households.js';
+import { deactivateMember, listActiveMembers } from '../services/members.js';
+import { updatePinnedBalance } from '../services/render.js';
 
 export async function renderMembersPanel(
   household: Household,
