@@ -1,4 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { Api } from 'grammy';
+import { config } from '../src/config';
+import { todayIn } from '../src/domain/dates';
+import { monthSummaryView, prevYm } from '../src/handlers/commands';
+import { listMonthExpenses } from '../src/services/expenses';
+import { listHouseholds } from '../src/services/households';
 
 // Ежемесячная автосводка: 1-го числа бот постит в каждую активную группу
 // итог прошлого месяца (расписание — в vercel.json, время в UTC).
@@ -9,26 +15,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return;
   }
 
-  const [{ Api }, { config }, { todayIn }, { listHouseholds }, commands, expensesSvc] =
-    await Promise.all([
-      import('grammy'),
-      import('../src/config'),
-      import('../src/domain/dates'),
-      import('../src/services/households'),
-      import('../src/handlers/commands'),
-      import('../src/services/expenses'),
-    ]);
-
   const cfg = config();
   const api = new Api(cfg.TELEGRAM_BOT_TOKEN);
-  const ym = commands.prevYm(todayIn(cfg.TZ).slice(0, 7));
+  const ym = prevYm(todayIn(cfg.TZ).slice(0, 7));
 
   let sent = 0;
   for (const hh of await listHouseholds()) {
     try {
-      const rows = await expensesSvc.listMonthExpenses(hh.id, ym);
+      const rows = await listMonthExpenses(hh.id, ym);
       if (!rows.some((r) => r.kind === 'expense')) continue;
-      const { text, keyboard } = await commands.monthSummaryView(hh, ym);
+      const { text, keyboard } = await monthSummaryView(hh, ym);
       await api.sendMessage(hh.tgChatId, text, { parse_mode: 'HTML', reply_markup: keyboard });
       sent++;
     } catch (err) {

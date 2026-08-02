@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { webhookCallback } from 'grammy';
+import { createBot } from '../src/bot';
 
-// Тяжёлые импорты — лениво внутри хендлера, чтобы не тормозить холодный старт.
 let webhookHandler: ((req: VercelRequest, res: VercelResponse) => Promise<unknown>) | undefined;
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
@@ -13,10 +14,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
   try {
     if (!webhookHandler) {
-      const [{ webhookCallback }, { createBot }] = await Promise.all([
-        import('grammy'),
-        import('../src/bot'),
-      ]);
       const bot = createBot();
       if (!bot.isInited()) await bot.init();
       webhookHandler = webhookCallback(bot, 'http');
