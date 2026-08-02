@@ -46,6 +46,7 @@ export function renderExpenseReply(
   names: MemberNames,
   transfers: Transfer[],
   symbol: string,
+  today: string,
 ): string {
   const payer = name(names, view.payerId);
   const money = formatMoney(view.amountMinor, symbol);
@@ -59,7 +60,9 @@ export function renderExpenseReply(
   }
 
   const cat = categoryLabel(view);
-  const headParts = [money, ...(cat ? [cat] : []), payer];
+  const dateLabel =
+    view.spentOn !== today ? `за ${view.spentOn.slice(8, 10)}.${view.spentOn.slice(5, 7)}` : null;
+  const headParts = [money, ...(cat ? [cat] : []), payer, ...(dateLabel ? [dateLabel] : [])];
   if (view.deleted) {
     return `<s>${money}${cat ? ` · ${cat}` : ''}</s> удалено`;
   }

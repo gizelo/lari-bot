@@ -2,6 +2,7 @@ import type { Api } from 'grammy';
 import { InlineKeyboard } from 'grammy';
 import { config } from '../config';
 import type { Household } from '../db/schema';
+import { shiftDays, todayIn } from '../domain/dates';
 import type { Transfer } from '../domain/balance';
 import { computeNets, simplifyDebts } from '../domain/balance';
 import {
@@ -53,15 +54,30 @@ export async function categoryPickerKeyboard(
   return kb;
 }
 
+/** Последние 8 дней; выбранная дата уходит в callback как ISO. */
+export function datePickerKeyboard(expenseIdForBack: string): InlineKeyboard {
+  const today = todayIn(config().TZ);
+  const kb = new InlineKeyboard();
+  for (let i = 0; i < 8; i++) {
+    const iso = shiftDays(today, -i);
+    const label =
+      i === 0 ? 'Сегодня' : i === 1 ? 'Вчера' : `${iso.slice(8, 10)}.${iso.slice(5, 7)}`;
+    kb.text(label, `dd:${iso}`);
+    if (i % 2 === 1) kb.row();
+  }
+  return kb.text('⬅️ Назад', `cb:${expenseIdForBack}`);
+}
+
 export async function expenseKeyboard(row: ExpenseRow): Promise<InlineKeyboard> {
   if (row.deletedAt !== null) return new InlineKeyboard().text('↩️ Вернуть', `r:${row.id}`);
   if (row.kind === 'settlement') return new InlineKeyboard().text('🗑 Удалить', `d:${row.id}`);
   if (!row.categoryId) {
     const kb = await categoryPickerKeyboard(row.householdId);
-    return kb.text('🗑 Удалить', `d:${row.id}`);
+    return kb.text('📅 Дата', `dp:${row.id}`).text('🗑 Удалить', `d:${row.id}`);
   }
   return new InlineKeyboard()
     .text('🏷 Категория', `c:${row.id}`)
+    .text('📅 Дата', `dp:${row.id}`)
     .text('🗑 Удалить', `d:${row.id}`);
 }
 
@@ -69,7 +85,14 @@ export async function renderExpenseMessage(
   row: ExpenseRow,
 ): Promise<{ text: string; keyboard: InlineKeyboard }> {
   const { transfers, names } = await balanceView(row.householdId);
-  const text = renderExpenseReply(toExpenseView(row), names, transfers, config().CURRENCY_SYMBOL);
+  const cfg = config();
+  const text = renderExpenseReply(
+    toExpenseView(row),
+    names,
+    transfers,
+    cfg.CURRENCY_SYMBOL,
+    todayIn(cfg.TZ),
+  );
   return { text, keyboard: await expenseKeyboard(row) };
 }
 

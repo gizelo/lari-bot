@@ -4,12 +4,14 @@ import {
   getExpenseRow,
   restoreExpense,
   setExpenseCategory,
+  setExpenseSpentOn,
   softDeleteExpense,
 } from '../services/expenses';
 import { getOrCreateHousehold } from '../services/households';
 import { deactivateMember, ensureMember } from '../services/members';
 import {
   categoryPickerKeyboard,
+  datePickerKeyboard,
   refreshExpenseReply,
   updatePinnedBalance,
 } from '../services/render';
@@ -77,6 +79,31 @@ callbacksComposer.callbackQuery(/^c:(.+)$/, async (ctx) => {
 callbacksComposer.callbackQuery(/^cb:(.+)$/, async (ctx) => {
   await ctx.answerCallbackQuery();
   await refreshAfterMutation(ctx, ctx.match[1]!);
+});
+
+callbacksComposer.callbackQuery(/^dp:(.+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  await ctx
+    .editMessageReplyMarkup({ reply_markup: datePickerKeyboard(ctx.match[1]!) })
+    .catch(() => {});
+});
+
+// Выбор даты: расход находим по ответному сообщению бота, на котором кнопки.
+callbacksComposer.callbackQuery(/^dd:(\d{4}-\d{2}-\d{2})$/, async (ctx) => {
+  const messageId = ctx.callbackQuery.message?.message_id;
+  if (!messageId) {
+    await ctx.answerCallbackQuery({ text: 'Сообщение недоступно' });
+    return;
+  }
+  const hh = await household(ctx);
+  const expense = await findByReplyMessageId(hh.id, messageId);
+  if (!expense) {
+    await ctx.answerCallbackQuery({ text: 'Запись не найдена' });
+    return;
+  }
+  await setExpenseSpentOn(expense.id, ctx.match[1]!);
+  await ctx.answerCallbackQuery({ text: 'Дата обновлена' });
+  await refreshAfterMutation(ctx, expense.id);
 });
 
 // Выбор категории: расход находим по ответному сообщению бота, на котором кнопки.

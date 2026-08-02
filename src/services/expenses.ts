@@ -91,6 +91,10 @@ export async function setExpenseCategory(id: string, categoryId: string): Promis
   await db().update(expenses).set({ categoryId }).where(eq(expenses.id, id));
 }
 
+export async function setExpenseSpentOn(id: string, spentOn: string): Promise<void> {
+  await db().update(expenses).set({ spentOn }).where(eq(expenses.id, id));
+}
+
 export async function updateParsedExpense(
   id: string,
   patch: {
