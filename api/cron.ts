@@ -1,0 +1,41 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+
+// Ежемесячная автосводка: 1-го числа бот постит в каждую активную группу
+// итог прошлого месяца (расписание — в vercel.json, время в UTC).
+export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
+  const secret = process.env.CRON_SECRET;
+  if (!secret || req.headers.authorization !== `Bearer ${secret}`) {
+    res.status(401).json({ ok: false });
+    return;
+  }
+
+  const [{ Api }, { config }, { todayIn }, { listHouseholds }, commands, expensesSvc] =
+    await Promise.all([
+      import('grammy'),
+      import('../src/config'),
+      import('../src/domain/dates'),
+      import('../src/services/households'),
+      import('../src/handlers/commands'),
+      import('../src/services/expenses'),
+    ]);
+
+  const cfg = config();
+  const api = new Api(cfg.TELEGRAM_BOT_TOKEN);
+  const ym = commands.prevYm(todayIn(cfg.TZ).slice(0, 7));
+
+  let sent = 0;
+  for (const hh of await listHouseholds()) {
+    try {
+      const rows = await expensesSvc.listMonthExpenses(hh.id, ym);
+      if (!rows.some((r) => r.kind === 'expense')) continue;
+      const { text, keyboard } = await commands.monthSummaryView(hh, ym);
+      await api.sendMessage(hh.tgChatId, text, { parse_mode: 'HTML', reply_markup: keyboard });
+      sent++;
+    } catch (err) {
+      // Одна недоступная группа (бота удалили и т.п.) не должна ронять рассылку.
+      console.error(`Автосводка не отправлена в household ${hh.id}`, err);
+    }
+  }
+
+  res.status(200).json({ ok: true, month: ym, sent });
+}

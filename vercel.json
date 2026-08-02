@@ -4,6 +4,15 @@
   "functions": {
     "api/telegram.ts": {
       "maxDuration": 30
+    },
+    "api/cron.ts": {
+      "maxDuration": 60
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron",
+      "schedule": "0 6 1 * *"
+    }
+  ]
 }

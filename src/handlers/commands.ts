@@ -78,7 +78,7 @@ function monthBuckets(spends: ExpenseRow[]): {
   return { buckets: [...buckets.values()].sort((a, b) => b.total - a.total), total, payerTotals };
 }
 
-function prevYm(ym: string): string {
+export function prevYm(ym: string): string {
   const [y, m] = ym.split('-').map(Number);
   return m === 1 ? `${y! - 1}-12` : `${y}-${String(m! - 1).padStart(2, '0')}`;
 }
@@ -91,7 +91,7 @@ function nextYm(ym: string): string {
 const payerLine = (entries: Map<string, number>, symbol: string) =>
   [...entries.entries()].map(([name, sum]) => `${esc(name)} ${formatMoney(sum, symbol)}`).join(' · ');
 
-async function monthSummaryView(
+export async function monthSummaryView(
   hh: Household,
   ym: string,
 ): Promise<{ text: string; keyboard: InlineKeyboard }> {
