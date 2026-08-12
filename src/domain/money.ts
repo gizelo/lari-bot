@@ -1,5 +1,5 @@
-// Деньги — только целые минорные единицы (тетри, 1 ₾ = 100 тетри).
-// Парсинг строкой: Math.round(67.7 * 100) по дороге даёт 6770.000000000001.
+// Store money as integer minor units only (1 ₾ = 100 tetri).
+// Parse from strings because intermediate floating-point multiplication can lose precision.
 
 const AMOUNT_RE = /^(\d+)(?:[.,](\d{1,2}))?$/;
 

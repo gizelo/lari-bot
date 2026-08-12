@@ -5,12 +5,8 @@ export type Share = { memberId: string; shareMinor: number };
  * сначала плательщику, затем остальным в порядке передачи (по created_at участника).
  * Для двоих с нечётной суммой плательщик платит на 1 тетри больше.
  */
-export function splitEqually(
-  amountMinor: number,
-  memberIds: string[],
-  payerId: string,
-): Share[] {
-  if (memberIds.length === 0) throw new Error('splitEqually: пустой список участников');
+export function splitEqually(amountMinor: number, memberIds: string[], payerId: string): Share[] {
+  if (memberIds.length === 0) throw new Error('splitEqually: member list is empty');
   const n = memberIds.length;
   const base = Math.floor(amountMinor / n);
   let remainder = amountMinor - base * n;

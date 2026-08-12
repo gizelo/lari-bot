@@ -33,7 +33,7 @@ export async function ensureMember(
   return row!;
 }
 
-/** Обновляет имя существующего участника; не создаёт нового. */
+/** Updates an existing member's name without creating a new member. */
 export async function touchDisplayName(
   householdId: string,
   tgUserId: number,

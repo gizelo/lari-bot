@@ -1,13 +1,13 @@
 import { z } from 'zod';
 
 const envSchema = z.object({
-  TELEGRAM_BOT_TOKEN: z.string().min(1, 'TELEGRAM_BOT_TOKEN обязателен (BotFather -> /newbot)'),
-  // Обязателен только для вебхука — проверяется в api/telegram.ts и scripts/set-webhook.ts.
+  TELEGRAM_BOT_TOKEN: z.string().min(1, 'TELEGRAM_BOT_TOKEN is required (BotFather -> /newbot)'),
+  // Required only by the webhook and validated at the relevant entrypoints.
   TELEGRAM_WEBHOOK_SECRET: z.string().min(32).optional(),
   DATABASE_URL: z
     .string()
-    .min(1, 'DATABASE_URL обязателен (Supabase transaction pooler, порт 6543)'),
-  // Vercel подставляет системную TZ=':UTC' — Intl такое не принимает, чистим и валидируем.
+    .min(1, 'DATABASE_URL is required (Supabase transaction pooler, port 6543)'),
+  // Vercel may inject TZ=':UTC', which Intl does not accept, so normalize and validate it.
   TZ: z
     .string()
     .default('Asia/Tbilisi')
@@ -24,6 +24,8 @@ const envSchema = z.object({
   CURRENCY_SYMBOL: z.string().default('₾'),
 });
 
+const secretSchema = z.string().min(32);
+
 export type Config = z.infer<typeof envSchema>;
 
 let cached: Config | undefined;
@@ -35,9 +37,17 @@ export function config(): Config {
       const issues = parsed.error.issues
         .map((i) => `  ${i.path.join('.')}: ${i.message}`)
         .join('\n');
-      throw new Error(`Некорректные переменные окружения:\n${issues}`);
+      throw new Error(`Invalid environment variables:\n${issues}`);
     }
     cached = parsed.data;
   }
   return cached;
+}
+
+export function webhookSecret(): string {
+  return secretSchema.parse(process.env.TELEGRAM_WEBHOOK_SECRET);
+}
+
+export function cronSecret(): string {
+  return secretSchema.parse(process.env.CRON_SECRET);
 }

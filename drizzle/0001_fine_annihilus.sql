@@ -1,7 +1,7 @@
 DROP INDEX "categories_lower_name_idx";--> statement-breakpoint
 ALTER TABLE "categories" ADD COLUMN "household_id" uuid;--> statement-breakpoint
--- Бэкфилл: бывшие глобальные категории клонируются в каждую существующую группу,
--- расходы перевешиваются на клон своей группы, глобальные строки удаляются.
+-- Backfill: clone the former global categories into every existing household,
+-- move expenses to their household's clone, then remove the global rows.
 INSERT INTO "categories" ("household_id", "name", "aliases", "emoji", "position", "is_archived", "created_at")
 SELECT h."id", c."name", c."aliases", c."emoji", c."position", c."is_archived", c."created_at"
 FROM "categories" c CROSS JOIN "households" h

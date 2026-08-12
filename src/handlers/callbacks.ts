@@ -1,4 +1,5 @@
 import { Composer, type Context } from 'grammy';
+import { isValidIsoDate } from '../domain/dates.js';
 import {
   findByReplyMessageId,
   getExpenseRow,
@@ -7,6 +8,7 @@ import {
   setExpenseSpentOn,
   softDeleteExpense,
 } from '../services/expenses.js';
+import { getCategory } from '../services/categories.js';
 import { getOrCreateHousehold } from '../services/households.js';
 import { deactivateMember, ensureMember } from '../services/members.js';
 import {
@@ -26,7 +28,7 @@ async function household(ctx: Context) {
 
 async function refreshAfterMutation(ctx: Context, expenseId: string): Promise<void> {
   const hh = await household(ctx);
-  const row = await getExpenseRow(expenseId);
+  const row = await getExpenseRow(hh.id, expenseId);
   if (row) await refreshExpenseReply(ctx.api, hh.tgChatId, row);
   await updatePinnedBalance(ctx.api, hh);
 }
@@ -52,19 +54,23 @@ callbacksComposer.callbackQuery('lv', async (ctx) => {
 });
 
 callbacksComposer.callbackQuery(/^d:(.+)$/, async (ctx) => {
-  await softDeleteExpense(ctx.match[1]!);
+  const hh = await household(ctx);
+  await softDeleteExpense(hh.id, ctx.match[1]!);
   await ctx.answerCallbackQuery({ text: 'Удалено' });
   await refreshAfterMutation(ctx, ctx.match[1]!);
 });
 
 callbacksComposer.callbackQuery(/^(?:r|ok):(.+)$/, async (ctx) => {
-  await restoreExpense(ctx.match[1]!);
+  const hh = await household(ctx);
+  await restoreExpense(hh.id, ctx.match[1]!);
   await ctx.answerCallbackQuery({ text: 'Записано ✅' });
   await refreshAfterMutation(ctx, ctx.match[1]!);
 });
 
-// Отмена подтверждения крупной суммы: запись так и остаётся не влияющей на баланс.
+// Cancelling a large amount leaves the pending record excluded from the balance.
 callbacksComposer.callbackQuery(/^x:(.+)$/, async (ctx) => {
+  const hh = await household(ctx);
+  await softDeleteExpense(hh.id, ctx.match[1]!);
   await ctx.answerCallbackQuery({ text: 'Отменено' });
   await ctx.editMessageText('Запись отменена.').catch(() => {});
 });
@@ -88,8 +94,13 @@ callbacksComposer.callbackQuery(/^dp:(.+)$/, async (ctx) => {
     .catch(() => {});
 });
 
-// Выбор даты: расход находим по ответному сообщению бота, на котором кнопки.
+// Resolve the expense from the bot reply that owns the date buttons.
 callbacksComposer.callbackQuery(/^dd:(\d{4}-\d{2}-\d{2})$/, async (ctx) => {
+  const spentOn = ctx.match[1]!;
+  if (!isValidIsoDate(spentOn)) {
+    await ctx.answerCallbackQuery({ text: 'Некорректная дата' });
+    return;
+  }
   const messageId = ctx.callbackQuery.message?.message_id;
   if (!messageId) {
     await ctx.answerCallbackQuery({ text: 'Сообщение недоступно' });
@@ -101,12 +112,12 @@ callbacksComposer.callbackQuery(/^dd:(\d{4}-\d{2}-\d{2})$/, async (ctx) => {
     await ctx.answerCallbackQuery({ text: 'Запись не найдена' });
     return;
   }
-  await setExpenseSpentOn(expense.id, ctx.match[1]!);
+  await setExpenseSpentOn(hh.id, expense.id, spentOn);
   await ctx.answerCallbackQuery({ text: 'Дата обновлена' });
   await refreshAfterMutation(ctx, expense.id);
 });
 
-// Выбор категории: расход находим по ответному сообщению бота, на котором кнопки.
+// Resolve the expense from the bot reply that owns the category buttons.
 callbacksComposer.callbackQuery(/^cs:(.+)$/, async (ctx) => {
   const messageId = ctx.callbackQuery.message?.message_id;
   if (!messageId) {
@@ -119,7 +130,12 @@ callbacksComposer.callbackQuery(/^cs:(.+)$/, async (ctx) => {
     await ctx.answerCallbackQuery({ text: 'Запись не найдена' });
     return;
   }
-  await setExpenseCategory(expense.id, ctx.match[1]!);
+  const category = await getCategory(hh.id, ctx.match[1]!);
+  if (!category) {
+    await ctx.answerCallbackQuery({ text: 'Категория не найдена' });
+    return;
+  }
+  await setExpenseCategory(hh.id, expense.id, category.id);
   await ctx.answerCallbackQuery({ text: 'Категория обновлена' });
   await refreshAfterMutation(ctx, expense.id);
 });

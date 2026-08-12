@@ -11,11 +11,7 @@ import {
 } from '../services/expenses.js';
 import { getOrCreateHousehold } from '../services/households.js';
 import { handleNewExpense, parseGroupMessage } from './expense.js';
-import {
-  refreshExpenseReply,
-  toExpenseView,
-  updatePinnedBalance,
-} from '../services/render.js';
+import { refreshExpenseReply, toExpenseView, updatePinnedBalance } from '../services/render.js';
 
 export const editComposer = new Composer();
 
@@ -27,7 +23,7 @@ editComposer.on('edited_message:text', async (ctx) => {
   const existing = await findByMessageId(household.id, ctx.editedMessage.message_id);
 
   if (!existing) {
-    // Сообщение стало расходом только после правки — заводим запись как новую.
+    // The edited message became an expense, so create it as a new record.
     await handleNewExpense(ctx, ctx.editedMessage.message_id, text);
     return;
   }
@@ -36,7 +32,7 @@ editComposer.on('edited_message:text', async (ctx) => {
   const parsed = await parseGroupMessage(household.id, text);
 
   if (!parsed) {
-    await softDeleteExpense(existing.id);
+    await softDeleteExpense(household.id, existing.id);
     if (existing.tgReplyMessageId) {
       await ctx.api
         .editMessageText(
@@ -51,9 +47,9 @@ editComposer.on('edited_message:text', async (ctx) => {
     return;
   }
 
-  // Состав дележа — снапшот исходной записи; правка меняет только сумму и атрибуты.
-  const participantIds = (await getShares(existing.id)).map((s) => s.memberId);
-  await updateParsedExpense(existing.id, {
+  // Preserve the original membership snapshot; edits only change the amount and attributes.
+  const participantIds = (await getShares(household.id, existing.id)).map((s) => s.memberId);
+  await updateParsedExpense(household.id, existing.id, {
     amountMinor: parsed.amountMinor,
     categoryId: parsed.categoryId,
     comment: parsed.comment,
@@ -62,9 +58,9 @@ editComposer.on('edited_message:text', async (ctx) => {
   });
 
   if (parsed.needsConfirmation) {
-    await softDeleteExpense(existing.id);
+    await softDeleteExpense(household.id, existing.id);
     if (existing.tgReplyMessageId) {
-      const row = (await getExpenseRow(existing.id))!;
+      const row = (await getExpenseRow(household.id, existing.id))!;
       await ctx.api
         .editMessageText(
           ctx.chat.id,
@@ -82,7 +78,7 @@ editComposer.on('edited_message:text', async (ctx) => {
     return;
   }
 
-  const row = (await getExpenseRow(existing.id))!;
+  const row = (await getExpenseRow(household.id, existing.id))!;
   await refreshExpenseReply(ctx.api, ctx.chat.id, row);
   await updatePinnedBalance(ctx.api, household);
 });

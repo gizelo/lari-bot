@@ -1,21 +1,27 @@
 {
   "name": "lari-bot",
   "version": "1.0.0",
-  "description": "Telegram-бот учёта совместных расходов (GEL)",
+  "description": "Telegram bot for tracking shared expenses in GEL",
   "type": "module",
   "private": true,
   "scripts": {
     "dev": "tsx watch src/dev.ts",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm format:check",
+    "db:backup": "tsx scripts/backup.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "setwebhook": "tsx scripts/set-webhook.ts",
     "delwebhook": "tsx scripts/delete-webhook.ts"
   },
   "packageManager": "pnpm@11.0.8",
+  "engines": {
+    "node": "24.x"
+  },
   "dependencies": {
     "drizzle-orm": "^0.45.2",
     "grammy": "^1.45.1",
@@ -32,10 +38,5 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.65.0",
     "vitest": "^4.1.10"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ]
   }
 }

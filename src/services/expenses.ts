@@ -13,14 +13,36 @@ export type NewExpense = {
   comment: string | null;
   spentOn: string;
   tgMessageId?: number;
+  sourceKey?: string;
   createdByTgId: number;
-  /** true — запись создаётся «на паузе» (ожидает подтверждения) и не влияет на баланс. */
+  /** Creates a pending record that does not affect the balance until it is confirmed. */
   pending?: boolean;
   shares: Share[];
 };
 
-/** null — дубль (повторная доставка апдейта с тем же tg_message_id). */
-export async function createExpense(input: NewExpense): Promise<Expense | null> {
+export type CreateExpenseResult = { expense: Expense; created: boolean };
+
+export function validateShares(amountMinor: number, shares: Share[]): void {
+  const sharesTotal = shares.reduce((sum, share) => sum + share.shareMinor, 0);
+  if (sharesTotal !== amountMinor) {
+    throw new Error('Expense shares must add up to the expense amount');
+  }
+  if (new Set(shares.map((share) => share.memberId)).size !== shares.length) {
+    throw new Error('Expense shares must contain unique members');
+  }
+}
+
+export function monthDateRange(ym: string): { start: string; end: string } {
+  const [year, month] = ym.split('-').map(Number);
+  const start = `${ym}-01`;
+  const end =
+    month === 12 ? `${year! + 1}-01-01` : `${year}-${String(month! + 1).padStart(2, '0')}-01`;
+  return { start, end };
+}
+
+export async function createExpense(input: NewExpense): Promise<CreateExpenseResult> {
+  validateShares(input.amountMinor, input.shares);
+
   return db().transaction(async (tx) => {
     const [created] = await tx
       .insert(expenses)
@@ -33,25 +55,51 @@ export async function createExpense(input: NewExpense): Promise<Expense | null> 
         comment: input.comment,
         spentOn: input.spentOn,
         tgMessageId: input.tgMessageId ?? null,
+        sourceKey: input.sourceKey ?? null,
         createdByTgId: input.createdByTgId,
         deletedAt: input.pending ? new Date() : null,
       })
       .onConflictDoNothing()
       .returning();
-    if (!created) return null;
+    if (!created) {
+      const sourceCondition = input.sourceKey
+        ? eq(expenses.sourceKey, input.sourceKey)
+        : input.tgMessageId !== undefined
+          ? eq(expenses.tgMessageId, input.tgMessageId)
+          : undefined;
+      if (!sourceCondition) throw new Error('Expense insert conflicted without an idempotency key');
+      const [existing] = await tx
+        .select()
+        .from(expenses)
+        .where(and(eq(expenses.householdId, input.householdId), sourceCondition));
+      if (!existing) throw new Error('Conflicting expense could not be loaded');
+      return { expense: existing, created: false };
+    }
     await tx
       .insert(expenseShares)
-      .values(input.shares.map((s) => ({ expenseId: created.id, ...s })));
-    return created;
+      .values(
+        input.shares.map((s) => ({ householdId: input.householdId, expenseId: created.id, ...s })),
+      );
+    return { expense: created, created: true };
   });
 }
 
-export async function setReplyMessageId(id: string, tgReplyMessageId: number): Promise<void> {
-  await db().update(expenses).set({ tgReplyMessageId }).where(eq(expenses.id, id));
+export async function setReplyMessageId(
+  householdId: string,
+  id: string,
+  tgReplyMessageId: number,
+): Promise<void> {
+  await db()
+    .update(expenses)
+    .set({ tgReplyMessageId })
+    .where(and(eq(expenses.id, id), eq(expenses.householdId, householdId)));
 }
 
-export async function getExpense(id: string): Promise<Expense | undefined> {
-  const [row] = await db().select().from(expenses).where(eq(expenses.id, id));
+export async function getExpense(householdId: string, id: string): Promise<Expense | undefined> {
+  const [row] = await db()
+    .select()
+    .from(expenses)
+    .where(and(eq(expenses.id, id), eq(expenses.householdId, householdId)));
   return row;
 }
 
@@ -79,23 +127,46 @@ export async function findByReplyMessageId(
   return row;
 }
 
-export async function softDeleteExpense(id: string): Promise<void> {
-  await db().update(expenses).set({ deletedAt: new Date() }).where(eq(expenses.id, id));
+export async function softDeleteExpense(householdId: string, id: string): Promise<void> {
+  await db()
+    .update(expenses)
+    .set({ deletedAt: new Date() })
+    .where(
+      and(eq(expenses.id, id), eq(expenses.householdId, householdId), isNull(expenses.deletedAt)),
+    );
 }
 
-export async function restoreExpense(id: string): Promise<void> {
-  await db().update(expenses).set({ deletedAt: null }).where(eq(expenses.id, id));
+export async function restoreExpense(householdId: string, id: string): Promise<void> {
+  await db()
+    .update(expenses)
+    .set({ deletedAt: null })
+    .where(and(eq(expenses.id, id), eq(expenses.householdId, householdId)));
 }
 
-export async function setExpenseCategory(id: string, categoryId: string): Promise<void> {
-  await db().update(expenses).set({ categoryId }).where(eq(expenses.id, id));
+export async function setExpenseCategory(
+  householdId: string,
+  id: string,
+  categoryId: string,
+): Promise<void> {
+  await db()
+    .update(expenses)
+    .set({ categoryId })
+    .where(and(eq(expenses.id, id), eq(expenses.householdId, householdId)));
 }
 
-export async function setExpenseSpentOn(id: string, spentOn: string): Promise<void> {
-  await db().update(expenses).set({ spentOn }).where(eq(expenses.id, id));
+export async function setExpenseSpentOn(
+  householdId: string,
+  id: string,
+  spentOn: string,
+): Promise<void> {
+  await db()
+    .update(expenses)
+    .set({ spentOn })
+    .where(and(eq(expenses.id, id), eq(expenses.householdId, householdId)));
 }
 
 export async function updateParsedExpense(
+  householdId: string,
   id: string,
   patch: {
     amountMinor: number;
@@ -105,6 +176,7 @@ export async function updateParsedExpense(
     shares: Share[];
   },
 ): Promise<void> {
+  validateShares(patch.amountMinor, patch.shares);
   await db().transaction(async (tx) => {
     await tx
       .update(expenses)
@@ -115,9 +187,13 @@ export async function updateParsedExpense(
         spentOn: patch.spentOn,
         deletedAt: null,
       })
-      .where(eq(expenses.id, id));
-    await tx.delete(expenseShares).where(eq(expenseShares.expenseId, id));
-    await tx.insert(expenseShares).values(patch.shares.map((s) => ({ expenseId: id, ...s })));
+      .where(and(eq(expenses.id, id), eq(expenses.householdId, householdId)));
+    await tx
+      .delete(expenseShares)
+      .where(and(eq(expenseShares.expenseId, id), eq(expenseShares.householdId, householdId)));
+    await tx
+      .insert(expenseShares)
+      .values(patch.shares.map((s) => ({ householdId, expenseId: id, ...s })));
   });
 }
 
@@ -147,17 +223,23 @@ function toExpenseRow(r: {
   };
 }
 
-export async function getExpenseRow(id: string): Promise<ExpenseRow | undefined> {
+export async function getExpenseRow(
+  householdId: string,
+  id: string,
+): Promise<ExpenseRow | undefined> {
   const [row] = await db()
     .select({ expense: expenses, ...expenseRowSelect })
     .from(expenses)
     .leftJoin(categories, eq(expenses.categoryId, categories.id))
     .innerJoin(members, eq(expenses.payerId, members.id))
-    .where(eq(expenses.id, id));
+    .where(and(eq(expenses.id, id), eq(expenses.householdId, householdId)));
   return row ? toExpenseRow(row) : undefined;
 }
 
-export async function listRecentExpenses(householdId: string, limit: number): Promise<ExpenseRow[]> {
+export async function listRecentExpenses(
+  householdId: string,
+  limit: number,
+): Promise<ExpenseRow[]> {
   const rows = await db()
     .select({ expense: expenses, ...expenseRowSelect })
     .from(expenses)
@@ -170,6 +252,7 @@ export async function listRecentExpenses(householdId: string, limit: number): Pr
 }
 
 export async function listMonthExpenses(householdId: string, ym: string): Promise<ExpenseRow[]> {
+  const { start, end } = monthDateRange(ym);
   const rows = await db()
     .select({ expense: expenses, ...expenseRowSelect })
     .from(expenses)
@@ -179,7 +262,8 @@ export async function listMonthExpenses(householdId: string, ym: string): Promis
       and(
         eq(expenses.householdId, householdId),
         isNull(expenses.deletedAt),
-        sql`to_char(${expenses.spentOn}, 'YYYY-MM') = ${ym}`,
+        sql`${expenses.spentOn} >= ${start}`,
+        sql`${expenses.spentOn} < ${end}`,
       ),
     )
     .orderBy(expenses.spentOn);
@@ -208,9 +292,12 @@ export async function loadBalanceEntries(householdId: string): Promise<BalanceEn
     .select()
     .from(expenseShares)
     .where(
-      inArray(
-        expenseShares.expenseId,
-        rows.map((r) => r.id),
+      and(
+        eq(expenseShares.householdId, householdId),
+        inArray(
+          expenseShares.expenseId,
+          rows.map((r) => r.id),
+        ),
       ),
     );
   const byExpense = new Map<string, { memberId: string; shareMinor: number }[]>();
@@ -227,10 +314,10 @@ export async function loadBalanceEntries(householdId: string): Promise<BalanceEn
   }));
 }
 
-export async function getShares(expenseId: string): Promise<Share[]> {
+export async function getShares(householdId: string, expenseId: string): Promise<Share[]> {
   const rows = await db()
     .select()
     .from(expenseShares)
-    .where(eq(expenseShares.expenseId, expenseId));
+    .where(and(eq(expenseShares.expenseId, expenseId), eq(expenseShares.householdId, householdId)));
   return rows.map((r) => ({ memberId: r.memberId, shareMinor: r.shareMinor }));
 }

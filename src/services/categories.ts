@@ -3,7 +3,11 @@ import { db } from '../db/client.js';
 import { categories, type Category } from '../db/schema.js';
 
 export const DEFAULT_CATEGORIES = [
-  { name: 'Продукты', aliases: ['продукты', 'еда', 'магазин', 'супермаркет', 'магаз'], emoji: '🛒' },
+  {
+    name: 'Продукты',
+    aliases: ['продукты', 'еда', 'магазин', 'супермаркет', 'магаз'],
+    emoji: '🛒',
+  },
   {
     name: 'Кафе/рестораны',
     aliases: ['кафе', 'ресторан', 'рестик', 'кофе', 'бар', 'доставка'],
@@ -38,8 +42,11 @@ export async function listAllCategories(householdId: string): Promise<Category[]
     .orderBy(asc(categories.position));
 }
 
-export async function getCategory(id: string): Promise<Category | undefined> {
-  const [row] = await db().select().from(categories).where(eq(categories.id, id));
+export async function getCategory(householdId: string, id: string): Promise<Category | undefined> {
+  const [row] = await db()
+    .select()
+    .from(categories)
+    .where(and(eq(categories.id, id), eq(categories.householdId, householdId)));
   return row;
 }
 
@@ -51,25 +58,49 @@ export async function createCategory(householdId: string, name: string): Promise
   const max = rows[0]?.max ?? 0;
   const [created] = await db()
     .insert(categories)
-    // Название автоматически становится первым алиасом.
+    // The category name is always its first alias.
     .values({ householdId, name, aliases: [name.toLowerCase()], position: max + 1 })
     .onConflictDoNothing()
     .returning();
   return created ?? null;
 }
 
-export async function renameCategory(id: string, name: string): Promise<void> {
-  await db().update(categories).set({ name }).where(eq(categories.id, id));
+export async function renameCategory(householdId: string, id: string, name: string): Promise<void> {
+  await db()
+    .update(categories)
+    .set({ name })
+    .where(and(eq(categories.id, id), eq(categories.householdId, householdId)));
 }
 
-export async function setCategoryAliases(id: string, aliases: string[]): Promise<void> {
-  await db().update(categories).set({ aliases }).where(eq(categories.id, id));
+export async function setCategoryAliases(
+  householdId: string,
+  id: string,
+  aliases: string[],
+): Promise<void> {
+  await db()
+    .update(categories)
+    .set({ aliases })
+    .where(and(eq(categories.id, id), eq(categories.householdId, householdId)));
 }
 
-export async function setCategoryEmoji(id: string, emoji: string | null): Promise<void> {
-  await db().update(categories).set({ emoji }).where(eq(categories.id, id));
+export async function setCategoryEmoji(
+  householdId: string,
+  id: string,
+  emoji: string | null,
+): Promise<void> {
+  await db()
+    .update(categories)
+    .set({ emoji })
+    .where(and(eq(categories.id, id), eq(categories.householdId, householdId)));
 }
 
-export async function setCategoryArchived(id: string, isArchived: boolean): Promise<void> {
-  await db().update(categories).set({ isArchived }).where(eq(categories.id, id));
+export async function setCategoryArchived(
+  householdId: string,
+  id: string,
+  isArchived: boolean,
+): Promise<void> {
+  await db()
+    .update(categories)
+    .set({ isArchived })
+    .where(and(eq(categories.id, id), eq(categories.householdId, householdId)));
 }

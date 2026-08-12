@@ -5,11 +5,7 @@ import { renderConfirmRequest } from '../domain/formatting.js';
 import { parseExpense, type ParsedExpense } from '../domain/parser.js';
 import { splitEqually } from '../domain/split.js';
 import { listActiveCategories } from '../services/categories.js';
-import {
-  createExpense,
-  getExpenseRow,
-  setReplyMessageId,
-} from '../services/expenses.js';
+import { createExpense, getExpenseRow, setReplyMessageId } from '../services/expenses.js';
 import { getOrCreateHousehold } from '../services/households.js';
 import { ensureMember, listActiveMembers, touchDisplayName } from '../services/members.js';
 import { renderExpenseMessage, toExpenseView, updatePinnedBalance } from '../services/render.js';
@@ -30,15 +26,19 @@ export async function parseGroupMessage(
   );
 }
 
-/** Общий путь для нового сообщения и для правки, за которой не стоит старая запись. */
-export async function handleNewExpense(ctx: Context, messageId: number, text: string): Promise<void> {
+/** Shared path for new messages and edits without an existing expense. */
+export async function handleNewExpense(
+  ctx: Context,
+  messageId: number,
+  text: string,
+): Promise<void> {
   const chat = ctx.chat;
   const from = ctx.from;
   if (!chat || !from || from.is_bot) return;
 
   const household = await getOrCreateHousehold(chat.id, chat.title ?? 'Группа');
   const parsed = await parseGroupMessage(household.id, text);
-  if (!parsed) return; // не расход — молчим полностью
+  if (!parsed) return; // Ignore messages that are not expenses.
 
   const payer = await ensureMember(household.id, from.id, displayName(from));
   const active = await listActiveMembers(household.id);
@@ -48,7 +48,7 @@ export async function handleNewExpense(ctx: Context, messageId: number, text: st
     payer.id,
   );
 
-  const created = await createExpense({
+  const result = await createExpense({
     householdId: household.id,
     kind: 'expense',
     categoryId: parsed.categoryId,
@@ -57,14 +57,19 @@ export async function handleNewExpense(ctx: Context, messageId: number, text: st
     comment: parsed.comment,
     spentOn: parsed.spentOn,
     tgMessageId: messageId,
+    sourceKey: `message:${chat.id}:${messageId}`,
     createdByTgId: from.id,
     pending: parsed.needsConfirmation,
     shares,
   });
-  if (!created) return; // дубль апдейта
+  const created = result.expense;
+  if (!result.created && created.tgReplyMessageId) {
+    await updatePinnedBalance(ctx.api, household);
+    return;
+  }
 
-  if (parsed.needsConfirmation) {
-    const row = (await getExpenseRow(created.id))!;
+  if (created.deletedAt) {
+    const row = (await getExpenseRow(household.id, created.id))!;
     const reply = await ctx.api.sendMessage(
       chat.id,
       renderConfirmRequest(toExpenseView(row), config().CURRENCY_SYMBOL),
@@ -75,18 +80,18 @@ export async function handleNewExpense(ctx: Context, messageId: number, text: st
           .text('✖️ Отмена', `x:${created.id}`),
       },
     );
-    await setReplyMessageId(created.id, reply.message_id);
+    await setReplyMessageId(household.id, created.id, reply.message_id);
     return;
   }
 
-  const row = (await getExpenseRow(created.id))!;
+  const row = (await getExpenseRow(household.id, created.id))!;
   const { text: replyText, keyboard } = await renderExpenseMessage(row);
   const reply = await ctx.api.sendMessage(chat.id, replyText, {
     parse_mode: 'HTML',
     reply_parameters: { message_id: messageId },
     reply_markup: keyboard,
   });
-  await setReplyMessageId(created.id, reply.message_id);
+  await setReplyMessageId(household.id, created.id, reply.message_id);
   await updatePinnedBalance(ctx.api, household);
 }
 
@@ -95,7 +100,7 @@ export const expenseComposer = new Composer();
 expenseComposer.on('message:text', async (ctx) => {
   const text = ctx.message.text;
   if (text.startsWith('/')) return;
-  // Имя участника обновляется на каждом сообщении, даже не-расходе.
+  // Keep the member's display name current even when the message is not an expense.
   const household = await getOrCreateHousehold(ctx.chat.id, ctx.chat.title ?? 'Группа');
   if (ctx.from && !ctx.from.is_bot) {
     await touchDisplayName(household.id, ctx.from.id, displayName(ctx.from));

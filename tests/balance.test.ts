@@ -12,58 +12,63 @@ function expense(payerId: string, amountMinor: number, participants: string[]): 
 }
 
 function settlement(payerId: string, toId: string, amountMinor: number): BalanceEntry {
-  return { payerId, amountMinor, deleted: false, shares: [{ memberId: toId, shareMinor: amountMinor }] };
+  return {
+    payerId,
+    amountMinor,
+    deleted: false,
+    shares: [{ memberId: toId, shareMinor: amountMinor }],
+  };
 }
 
 describe('computeNets + simplifyDebts', () => {
-  it('пустая история — все в расчёте', () => {
+  it('returns no transfers for an empty history', () => {
     expect(simplifyDebts(computeNets([]))).toEqual([]);
   });
 
-  it('один расход 100 от A — B должен A 50', () => {
+  it('makes B owe A half of an expense paid by A', () => {
     const nets = computeNets([expense('a', 10000, ['a', 'b'])]);
     expect(simplifyDebts(nets)).toEqual([{ fromId: 'b', toId: 'a', amountMinor: 5000 }]);
   });
 
-  it('симметричные расходы дают ноль', () => {
+  it('cancels out symmetric expenses', () => {
     const nets = computeNets([expense('a', 10000, ['a', 'b']), expense('b', 10000, ['a', 'b'])]);
     expect(simplifyDebts(nets)).toEqual([]);
   });
 
-  it('нечётная сумма: 33 тетри от A — B должен 16, A несёт 17', () => {
+  it('assigns the odd minor unit to the payer', () => {
     const nets = computeNets([expense('a', 33, ['a', 'b'])]);
     expect(simplifyDebts(nets)).toEqual([{ fromId: 'b', toId: 'a', amountMinor: 16 }]);
   });
 
-  it('settlement ровно на сумму долга обнуляет баланс', () => {
+  it('clears the balance with an exact settlement', () => {
     const nets = computeNets([expense('a', 10000, ['a', 'b']), settlement('b', 'a', 5000)]);
     expect(simplifyDebts(nets)).toEqual([]);
   });
 
-  it('частичный settlement уменьшает долг', () => {
+  it('reduces debt with a partial settlement', () => {
     const nets = computeNets([expense('a', 10000, ['a', 'b']), settlement('b', 'a', 2000)]);
     expect(simplifyDebts(nets)).toEqual([{ fromId: 'b', toId: 'a', amountMinor: 3000 }]);
   });
 
-  it('удалённая запись не влияет на баланс', () => {
+  it('ignores deleted records', () => {
     const deleted = { ...expense('a', 10000, ['a', 'b']), deleted: true };
     expect(simplifyDebts(computeNets([deleted]))).toEqual([]);
   });
 
-  it('контрольные данные июля: Роберт должен Никите 36.50 ₾', () => {
+  it('matches the July reference balance', () => {
     const two = ['nikita', 'robert'];
     const nets = computeNets([
-      expense('nikita', 47700, two), // продукты
+      expense('nikita', 47700, two), // groceries
       expense('robert', 22200, two),
-      expense('nikita', 2000, two), // кафе
+      expense('nikita', 2000, two), // cafe
       expense('robert', 20200, two),
     ]);
     expect(simplifyDebts(nets)).toEqual([{ fromId: 'robert', toId: 'nikita', amountMinor: 3650 }]);
   });
 
-  it('вход третьего не меняет старые записи: они делятся по своему снапшоту', () => {
+  it('does not change historical shares when a third member joins', () => {
     const nets = computeNets([
-      expense('a', 10000, ['a', 'b']), // до прихода c
+      expense('a', 10000, ['a', 'b']), // before c joins
       expense('c', 9000, ['a', 'b', 'c']),
     ]);
     expect(nets.get('a')).toBe(10000 - 5000 - 3000);
@@ -71,10 +76,10 @@ describe('computeNets + simplifyDebts', () => {
     expect(nets.get('c')).toBe(9000 - 3000);
   });
 
-  it('вышедший участник сохраняет долг, пока не рассчитается', () => {
+  it('preserves debt after a member leaves', () => {
     const nets = computeNets([
       expense('a', 10000, ['a', 'b', 'c']),
-      // c вышел, дальше делят на двоих — его долг остаётся
+      // c has left, so new expenses are split between two members while the old debt remains.
       expense('a', 6000, ['a', 'b']),
     ]);
     expect(nets.get('c')).toBeLessThan(0);
@@ -82,15 +87,15 @@ describe('computeNets + simplifyDebts', () => {
     expect(transfers.some((t) => t.fromId === 'c')).toBe(true);
   });
 
-  it('троим хватает минимального числа переводов', () => {
-    // A заплатил всё: B и C должны только A — 2 перевода, не 3
+  it('uses the minimum number of transfers for three members', () => {
+    // A paid everything, so B and C each need one transfer to A.
     const nets = computeNets([expense('a', 30000, ['a', 'b', 'c'])]);
     const transfers = simplifyDebts(nets);
     expect(transfers).toHaveLength(2);
     expect(transfers.every((t) => t.toId === 'a')).toBe(true);
   });
 
-  it('сумма переводов сводит все нетто к нулю', () => {
+  it('keeps the total net balance at zero', () => {
     const entries = [
       expense('a', 12345, ['a', 'b', 'c']),
       expense('b', 6789, ['a', 'b', 'c']),

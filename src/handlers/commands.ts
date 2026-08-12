@@ -20,8 +20,18 @@ import { displayName } from './expense.js';
 import { sendMembersPanel, welcomeChat } from './membership.js';
 
 const MONTHS = [
-  'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
-  'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь',
+  'Январь',
+  'Февраль',
+  'Март',
+  'Апрель',
+  'Май',
+  'Июнь',
+  'Июль',
+  'Август',
+  'Сентябрь',
+  'Октябрь',
+  'Ноябрь',
+  'Декабрь',
 ];
 
 async function household(ctx: Context): Promise<Household> {
@@ -36,10 +46,13 @@ async function sendBalance(ctx: Context): Promise<void> {
   });
 }
 
-function parseMonthArg(arg: string | undefined, tz: string): string | null {
+export function parseMonthArg(arg: string | undefined, tz: string): string | null {
   const today = todayIn(tz);
   if (!arg) return today.slice(0, 7);
-  if (/^\d{4}-\d{2}$/.test(arg)) return arg;
+  if (/^\d{4}-\d{2}$/.test(arg)) {
+    const month = Number(arg.slice(5));
+    return month >= 1 && month <= 12 ? arg : null;
+  }
   if (/^\d{1,2}$/.test(arg)) {
     const m = Number(arg);
     if (m < 1 || m > 12) return null;
@@ -54,6 +67,10 @@ function monthTitle(ym: string): string {
 }
 
 type MonthBucket = { key: string; label: string; total: number; byPayer: Map<string, number> };
+
+export function isSettlementAmountAllowed(amountMinor: number, debtMinor: number): boolean {
+  return amountMinor > 0 && amountMinor <= debtMinor;
+}
 
 function monthBuckets(spends: ExpenseRow[]): {
   buckets: MonthBucket[];
@@ -89,7 +106,9 @@ function nextYm(ym: string): string {
 }
 
 const payerLine = (entries: Map<string, number>, symbol: string) =>
-  [...entries.entries()].map(([name, sum]) => `${esc(name)} ${formatMoney(sum, symbol)}`).join(' · ');
+  [...entries.entries()]
+    .map(([name, sum]) => `${esc(name)} ${formatMoney(sum, symbol)}`)
+    .join(' · ');
 
 export async function monthSummaryView(
   hh: Household,
@@ -150,9 +169,7 @@ async function monthListView(
   const symbol = config().CURRENCY_SYMBOL;
   const all = (await listMonthExpenses(hh.id, ym)).filter((r) => r.kind === 'expense');
   const rows =
-    categoryKey === null
-      ? all
-      : all.filter((r) => (r.categoryId ?? 'none') === categoryKey);
+    categoryKey === null ? all : all.filter((r) => (r.categoryId ?? 'none') === categoryKey);
 
   const header =
     categoryKey === null
@@ -181,7 +198,7 @@ async function monthListView(
   return { text, keyboard: new InlineKeyboard().text('⬅️ К сводке', `ms:${ym}`) };
 }
 
-/** Создаёт «расчёт на паузе» и просит подтвердить кнопкой — тот же механизм, что крупные суммы. */
+/** Creates a pending settlement and asks for confirmation, like a large expense. */
 async function proposeSettlement(
   ctx: Context,
   hh: Household,
@@ -190,7 +207,7 @@ async function proposeSettlement(
   amountMinor: number,
 ): Promise<void> {
   const symbol = config().CURRENCY_SYMBOL;
-  const created = await createExpense({
+  const result = await createExpense({
     householdId: hh.id,
     kind: 'settlement',
     categoryId: null,
@@ -199,10 +216,12 @@ async function proposeSettlement(
     comment: to.displayName,
     spentOn: todayIn(config().TZ),
     createdByTgId: ctx.from?.id ?? 0,
+    sourceKey: `settlement:${ctx.update.update_id}:${from.id}:${to.id}`,
     pending: true,
     shares: [{ memberId: to.id, shareMinor: amountMinor }],
   });
-  if (!created) return;
+  const created = result.expense;
+  if (!result.created && created.tgReplyMessageId) return;
   const msg = await ctx.reply(
     `Рассчитаться на ${formatMoney(amountMinor, symbol)}?\n${esc(from.displayName)} переводит ${esc(to.displayName)} ${formatMoney(amountMinor, symbol)}.`,
     {
@@ -211,7 +230,7 @@ async function proposeSettlement(
         .text('✖️ Отмена', `x:${created.id}`),
     },
   );
-  await setReplyMessageId(created.id, msg.message_id);
+  await setReplyMessageId(hh.id, created.id, msg.message_id);
 }
 
 export const commandsComposer = new Composer();
@@ -271,8 +290,7 @@ async function sendLast(ctx: Context): Promise<void> {
   const kb = new InlineKeyboard();
   const lines = rows.map((r, i) => {
     const date = `${r.spentOn.slice(8, 10)}.${r.spentOn.slice(5, 7)}`;
-    const cat =
-      r.kind === 'settlement' ? '💸 расчёт' : (r.categoryName ?? 'без категории');
+    const cat = r.kind === 'settlement' ? '💸 расчёт' : (r.categoryName ?? 'без категории');
     const comment = r.comment ? ` · ${esc(r.comment)}` : '';
     kb.text(`🗑 ${i + 1}. ${date} · ${formatMoney(r.amountMinor, symbol)}`, `d:${r.id}`).row();
     return `${i + 1}. ${date} · <b>${formatMoney(r.amountMinor, symbol)}</b> · ${cat} · ${esc(r.payerName)}${comment}`;
@@ -302,7 +320,7 @@ async function settle(ctx: Context, arg?: string): Promise<void> {
       await ctx.reply('Не понял сумму. Пример: /settle 20');
       return;
     }
-    // Частичный расчёт делает должник: ищем перевод от вызвавшего команду.
+    // A partial settlement is initiated by the debtor, so find their outgoing transfer.
     const caller = all.find((m) => m.tgUserId === ctx.from?.id);
     const mine = transfers.filter((t) => t.fromId === caller?.id);
     if (!caller || mine.length === 0) {
@@ -310,6 +328,10 @@ async function settle(ctx: Context, arg?: string): Promise<void> {
       return;
     }
     const target = mine[0]!;
+    if (!isSettlementAmountAllowed(amountMinor, target.amountMinor)) {
+      await ctx.reply('Сумма больше текущего долга. Укажи сумму не больше долга.');
+      return;
+    }
     await proposeSettlement(ctx, hh, caller, byId.get(target.toId)!, amountMinor);
     return;
   }
@@ -353,7 +375,10 @@ cmd.command('export', async (ctx) => {
     ),
   ];
   await ctx.replyWithDocument(
-    new InputFile(Buffer.from(lines.join('\n'), 'utf-8'), `lari-export-${todayIn(config().TZ)}.csv`),
+    new InputFile(
+      Buffer.from(lines.join('\n'), 'utf-8'),
+      `lari-export-${todayIn(config().TZ)}.csv`,
+    ),
   );
 });
 
@@ -384,15 +409,12 @@ cmd.hears(/^помощь$/iu, async (ctx) => {
   await ctx.reply(HELP, { parse_mode: 'HTML' });
 });
 
-// Расход, внесённый автором впервые, регистрирует его участником — /join не обязателен,
-// но команда полезна тем, кто хочет войти в дележ до первой траты.
+// A first expense automatically registers its author; /join is useful before that first expense.
 cmd.command('join', async (ctx) => {
   if (!ctx.from) return;
   const hh = await household(ctx);
   await ensureMember(hh.id, ctx.from.id, displayName(ctx.from));
   const active = await listActiveMembers(hh.id);
-  await ctx.reply(
-    `Ты в дележе ✅ Участников: ${active.length}. Полный список: /members`,
-  );
+  await ctx.reply(`Ты в дележе ✅ Участников: ${active.length}. Полный список: /members`);
   await updatePinnedBalance(ctx.api, hh);
 });

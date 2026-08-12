@@ -54,7 +54,7 @@ export async function categoryPickerKeyboard(
   return kb;
 }
 
-/** Последние 8 дней; выбранная дата уходит в callback как ISO. */
+/** Shows the last eight days and encodes the selected date as ISO in the callback. */
 export function datePickerKeyboard(expenseIdForBack: string): InlineKeyboard {
   const today = todayIn(config().TZ);
   const kb = new InlineKeyboard();
@@ -96,7 +96,7 @@ export async function renderExpenseMessage(
   return { text, keyboard: await expenseKeyboard(row) };
 }
 
-/** Перерисовывает ответное сообщение бота под расходом (после любой мутации). */
+/** Refreshes the bot reply attached to an expense after a mutation. */
 export async function refreshExpenseReply(
   api: Api,
   tgChatId: number,
@@ -114,7 +114,7 @@ export async function refreshExpenseReply(
   }
 }
 
-/** Держит в чате одно сообщение с актуальным балансом (закреп). */
+/** Maintains one pinned message with the current balance. */
 export async function updatePinnedBalance(api: Api, household: Household): Promise<void> {
   const { transfers, names } = await balanceView(household.id);
   const cfg = config();
@@ -127,20 +127,23 @@ export async function updatePinnedBalance(api: Api, household: Household): Promi
       });
       return;
     } catch (err) {
-      if (String(err).includes('message is not modified')) return;
-      // Сообщение удалили — создаём новое ниже.
+      const message = String(err);
+      if (message.includes('message is not modified')) return;
+      const missing =
+        message.includes('message to edit not found') ||
+        message.includes("message can't be edited");
+      if (!missing) throw err;
     }
   }
 
+  const sent = await api.sendMessage(household.tgChatId, text, { parse_mode: 'HTML' });
+  await setPinnedMessage(household.id, sent.message_id);
+  household.pinnedMessageId = sent.message_id;
   try {
-    const sent = await api.sendMessage(household.tgChatId, text, { parse_mode: 'HTML' });
-    await setPinnedMessage(household.id, sent.message_id);
-    household.pinnedMessageId = sent.message_id;
-    // Закрепить сможем только с правами админа — иначе пусть закрепят вручную.
     await api.pinChatMessage(household.tgChatId, sent.message_id, {
       disable_notification: true,
     });
-  } catch {
-    // Нет прав на закреп или отправку — не мешаем основному сценарию.
+  } catch (err) {
+    console.warn('telegram_pin_failed', { householdId: household.id, error: String(err) });
   }
 }

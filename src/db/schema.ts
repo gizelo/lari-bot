@@ -4,6 +4,7 @@ import {
   boolean,
   check,
   date,
+  foreignKey,
   index,
   integer,
   pgTable,
@@ -35,10 +36,13 @@ export const members = pgTable(
     isActive: boolean('is_active').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex('members_household_user_idx').on(t.householdId, t.tgUserId)],
+  (t) => [
+    uniqueIndex('members_household_user_idx').on(t.householdId, t.tgUserId),
+    uniqueIndex('members_id_household_idx').on(t.id, t.householdId),
+  ],
 );
 
-// У каждой группы свой набор категорий; дефолтные сеются при создании household.
+// Each household owns its category set; defaults are seeded when the household is created.
 export const categories = pgTable(
   'categories',
   {
@@ -47,13 +51,19 @@ export const categories = pgTable(
       .notNull()
       .references(() => households.id),
     name: text('name').notNull(),
-    aliases: text('aliases').array().notNull().default(sql`'{}'::text[]`),
+    aliases: text('aliases')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     emoji: text('emoji'),
     position: integer('position').notNull().default(0),
     isArchived: boolean('is_archived').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex('categories_household_lower_name_idx').on(t.householdId, sql`lower(${t.name})`)],
+  (t) => [
+    uniqueIndex('categories_household_lower_name_idx').on(t.householdId, sql`lower(${t.name})`),
+    uniqueIndex('categories_id_household_idx').on(t.id, t.householdId),
+  ],
 );
 
 export const expenses = pgTable(
@@ -64,15 +74,14 @@ export const expenses = pgTable(
       .notNull()
       .references(() => households.id),
     kind: text('kind', { enum: ['expense', 'settlement'] }).notNull(),
-    categoryId: uuid('category_id').references(() => categories.id),
-    payerId: uuid('payer_id')
-      .notNull()
-      .references(() => members.id),
+    categoryId: uuid('category_id'),
+    payerId: uuid('payer_id').notNull(),
     amountMinor: bigint('amount_minor', { mode: 'number' }).notNull(),
     comment: text('comment'),
     spentOn: date('spent_on').notNull(),
     tgMessageId: bigint('tg_message_id', { mode: 'number' }),
     tgReplyMessageId: bigint('tg_reply_message_id', { mode: 'number' }),
+    sourceKey: text('source_key'),
     createdByTgId: bigint('created_by_tg_id', { mode: 'number' }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
@@ -82,27 +91,52 @@ export const expenses = pgTable(
     check('expenses_kind_check', sql`${t.kind} in ('expense', 'settlement')`),
     index('expenses_household_spent_on_idx').on(t.householdId, t.spentOn),
     index('expenses_household_deleted_idx').on(t.householdId, t.deletedAt),
-    // Идемпотентность: повторная доставка апдейта не создаёт дубль.
+    // Idempotency: redelivering an update must not create a duplicate.
     uniqueIndex('expenses_household_message_idx')
       .on(t.householdId, t.tgMessageId)
       .where(sql`${t.tgMessageId} is not null`),
+    uniqueIndex('expenses_household_source_idx')
+      .on(t.householdId, t.sourceKey)
+      .where(sql`${t.sourceKey} is not null`),
+    uniqueIndex('expenses_id_household_idx').on(t.id, t.householdId),
+    foreignKey({
+      columns: [t.payerId, t.householdId],
+      foreignColumns: [members.id, members.householdId],
+      name: 'expenses_payer_household_fk',
+    }),
+    foreignKey({
+      columns: [t.categoryId, t.householdId],
+      foreignColumns: [categories.id, categories.householdId],
+      name: 'expenses_category_household_fk',
+    }),
   ],
 );
 
-// Снапшот дележа на момент внесения. Для expense — по строке на участника (включая
-// плательщика), для settlement — одна строка с получателем на полную сумму.
+// Membership snapshot at entry time. Expenses have one row per participant, including the
+// payer; settlements have one row for the recipient and the full amount.
 export const expenseShares = pgTable(
   'expense_shares',
   {
-    expenseId: uuid('expense_id')
+    householdId: uuid('household_id')
       .notNull()
-      .references(() => expenses.id, { onDelete: 'cascade' }),
-    memberId: uuid('member_id')
-      .notNull()
-      .references(() => members.id),
+      .references(() => households.id),
+    expenseId: uuid('expense_id').notNull(),
+    memberId: uuid('member_id').notNull(),
     shareMinor: bigint('share_minor', { mode: 'number' }).notNull(),
   },
-  (t) => [primaryKey({ columns: [t.expenseId, t.memberId] })],
+  (t) => [
+    primaryKey({ columns: [t.expenseId, t.memberId] }),
+    foreignKey({
+      columns: [t.expenseId, t.householdId],
+      foreignColumns: [expenses.id, expenses.householdId],
+      name: 'expense_shares_expense_household_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [t.memberId, t.householdId],
+      foreignColumns: [members.id, members.householdId],
+      name: 'expense_shares_member_household_fk',
+    }),
+  ],
 );
 
 export type Household = typeof households.$inferSelect;

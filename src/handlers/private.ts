@@ -1,7 +1,6 @@
 import { Composer } from 'grammy';
 
-// В личке нет ни данных, ни настроек: все траты, категории и импорт живут в группах,
-// у каждой группы — своё независимое хозяйство.
+// Private chats contain no data or settings; every group owns an independent ledger.
 export const privateComposer = new Composer();
 
 const PRIVATE_HELP = `Я считаю совместные расходы в группах и делю их поровну между участниками.

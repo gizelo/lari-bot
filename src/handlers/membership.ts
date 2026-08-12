@@ -15,9 +15,7 @@ export async function renderMembersPanel(
       : 'пока никого — нажмите кнопку';
   return {
     text: `👥 <b>Участники дележа:</b> ${list}\n\nРасходы делятся поровну между участниками. Нажми «Я участвую», чтобы войти в дележ.`,
-    keyboard: new InlineKeyboard()
-      .text('✅ Я участвую', 'j')
-      .text('🚪 Я больше не участвую', 'lv'),
+    keyboard: new InlineKeyboard().text('✅ Я участвую', 'j').text('🚪 Я больше не участвую', 'lv'),
   };
 }
 
@@ -52,7 +50,7 @@ membershipComposer.on('my_chat_member', async (ctx) => {
 });
 
 membershipComposer.on('message:new_chat_members', async (ctx) => {
-  const humans = ctx.message.new_chat_members.filter((u) => !u.is_bot);
+  const humans = ctx.message.new_chat_members.filter((user: { is_bot: boolean }) => !user.is_bot);
   if (humans.length === 0) return;
   const household = await getOrCreateHousehold(ctx.chat.id, ctx.chat.title ?? 'Группа');
   await sendMembersPanel(ctx.api, household);
@@ -65,7 +63,7 @@ membershipComposer.on('message:left_chat_member', async (ctx) => {
   await deactivateMember(household.id, user.id);
 });
 
-// Апгрейд группы в супергруппу меняет chat_id — переносим household на новый.
+// Telegram changes chat_id when upgrading a group, so move the household to the new ID.
 membershipComposer.on('message:migrate_to_chat_id', async (ctx) => {
   await migrateChatId(ctx.chat.id, ctx.message.migrate_to_chat_id);
 });

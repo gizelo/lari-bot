@@ -1,5 +1,4 @@
-// Serverless работает в UTC — дата расхода всегда вычисляется в Asia/Tbilisi,
-// иначе вечерние покупки уезжают на следующий день.
+// Serverless runs in UTC, but expense dates use Asia/Tbilisi to preserve local calendar days.
 export function todayIn(timeZone: string): string {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone,
@@ -16,7 +15,22 @@ export function shiftDays(isoDate: string, days: number): string {
 }
 
 export function isValidDate(year: number, month: number, day: number): boolean {
-  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+  if (
+    !Number.isInteger(year) ||
+    year < 1 ||
+    year > 9999 ||
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > 31
+  ) {
+    return false;
+  }
   const d = new Date(Date.UTC(year, month - 1, day));
-  return d.getUTCMonth() === month - 1 && d.getUTCDate() === day;
+  return d.getUTCFullYear() === year && d.getUTCMonth() === month - 1 && d.getUTCDate() === day;
+}
+
+export function isValidIsoDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  return Boolean(match && isValidDate(Number(match[1]), Number(match[2]), Number(match[3])));
 }

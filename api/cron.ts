@@ -1,15 +1,22 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Api } from 'grammy';
-import { config } from '../src/config.js';
+import { config, cronSecret } from '../src/config.js';
 import { todayIn } from '../src/domain/dates.js';
 import { monthSummaryView, prevYm } from '../src/handlers/commands.js';
 import { listMonthExpenses } from '../src/services/expenses.js';
 import { listHouseholds } from '../src/services/households.js';
 
-// Ежемесячная автосводка: 1-го числа бот постит в каждую активную группу
-// итог прошлого месяца (расписание — в vercel.json, время в UTC).
+// On the first day of each month, post the previous month's summary to every active group.
+// The UTC schedule is configured in vercel.json.
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
-  const secret = process.env.CRON_SECRET;
+  let secret: string;
+  try {
+    secret = cronSecret();
+  } catch (error) {
+    console.error('cron_config_invalid', { error: String(error) });
+    res.status(500).json({ ok: false });
+    return;
+  }
   if (!secret || req.headers.authorization !== `Bearer ${secret}`) {
     res.status(401).json({ ok: false });
     return;
@@ -28,8 +35,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       await api.sendMessage(hh.tgChatId, text, { parse_mode: 'HTML', reply_markup: keyboard });
       sent++;
     } catch (err) {
-      // Одна недоступная группа (бота удалили и т.п.) не должна ронять рассылку.
-      console.error(`Автосводка не отправлена в household ${hh.id}`, err);
+      // One unavailable group must not prevent delivery to the remaining groups.
+      console.error(`Monthly summary failed for household ${hh.id}`, err);
     }
   }
 

@@ -1,82 +1,91 @@
-# Lari — телеграм-бот учёта совместных расходов
+# Lari — shared expense Telegram bot
 
-Внести расход — одно сообщение в группу: `67 кафе`. Бот отвечает, кто кому сколько должен, и держит закреплённое сообщение с актуальным балансом. Расходы делятся поровну между участниками дележа; каждая группа ведёт свой независимый учёт.
+Record an expense with a single group message such as `67 кафе`. The bot replies with who owes whom and keeps a pinned message with the current balance. Expenses are split equally among participating members, and each group has an independent ledger.
 
-**Стек:** TypeScript, grammY, Drizzle ORM, Supabase Postgres, Vercel Serverless (webhook).
+**Stack:** TypeScript, grammY, Drizzle ORM, Supabase Postgres, and Vercel Serverless webhooks.
 
-## Как пользоваться (в группе)
+## Using the bot in a group
 
-- `67 кафе` — расход 67 ₾, категория «Кафе/рестораны»
-- `кафе 67`, `67.5 продукты`, `113 продукты карфур` (с комментарием)
-- `вчера 20 такси`, `24.07 68 продукты` — с датой
-- `67` — без категории, бот спросит кнопками (запись уже создана)
-- Сообщение без числа бот полностью игнорирует
-- Редактирование своего сообщения обновляет запись
-- `/balance` (баланс), `/month [07]` (итого), `/last` (последние), `/settle [20]` (рассчитались), `/members` (участники), `/export`, `/help`
+- `67 кафе` — a 67 ₾ expense in the Cafe/Restaurants category
+- `кафе 67`, `67.5 продукты`, `113 продукты карфур` — alternative order and an optional comment
+- `вчера 20 такси`, `24.07 68 продукты` — expenses with a date
+- `67` — an uncategorized expense; the bot asks for a category with buttons
+- Messages without a number are ignored
+- Editing your original message updates the expense
+- `/balance`, `/month [07]`, `/last`, `/settle [20]`, `/members`, `/export`, and `/help`
 
-1-го числа каждого месяца бот сам присылает в группу сводку за прошлый месяц (Vercel Cron, 10:00 по Тбилиси).
+On the first day of every month, the bot posts a summary for the previous month at 10:00 Asia/Tbilisi via Vercel Cron.
 
-Участником дележа становишься по кнопке «✅ Я участвую» или автоматически — с первой внесённой траты. Вышедший из дележа не получает новых долей, но его долг сохраняется.
+A person joins expense splitting through the `✅ Я участвую` button or automatically with their first expense. Leaving prevents new shares from being assigned while preserving existing debt.
 
-У каждой группы всё своё: категории (стартовый набор из 6 создаётся автоматически, настройка — `/categories` прямо в группе), история и баланс. Группы друг о друге ничего не знают, личный чат с ботом — только справка.
+Each group has its own categories, history, and balance. Six default categories are created automatically and can be managed with `/categories`. Groups cannot access one another's data; private chats only provide help.
 
-## Чеклист запуска (ручные шаги)
+## Setup checklist
 
 ### 1. BotFather
 
-1. `/newbot` → имя `Lari`, username вида `lari_expenses_bot` → **сохранить токен**.
-2. **Критично:** `/mybots` → бот → Bot Settings → Group Privacy → **Turn off**. Без этого бот не видит обычные сообщения в группе. Если бот уже был добавлен в группу до отключения — удалить его из группы и добавить заново.
-3. `/setcommands` → выбрать бота → вставить:
+1. Run `/newbot`, choose the name `Lari` and a username such as `lari_expenses_bot`, then save the token.
+2. In `/mybots` → bot → Bot Settings → Group Privacy, select **Turn off**. Otherwise the bot cannot see regular group messages. If it was already in the group, remove and add it again after changing this setting.
+3. Run `/setcommands`, select the bot, and paste:
 
-```
-balance - Кто кому должен
-month - Сводка за месяц
-last - Последние 10 записей
-settle - Рассчитаться
-members - Участники дележа
-join - Участвовать в дележе
-export - История в CSV
-help - Как вносить расходы
+```text
+balance - Show who owes whom
+month - Show a monthly summary
+last - Show the latest 10 records
+settle - Record a settlement
+members - Show expense-sharing members
+join - Join expense sharing
+export - Export history as CSV
+help - Explain how to record expenses
 ```
 
 ### 2. Supabase
 
-1. Создать проект на [supabase.com](https://supabase.com).
-2. Скопировать connection string: Project Settings → Database → Connection string → **Transaction pooler** (порт 6543). Заменить `[YOUR-PASSWORD]` на пароль БД.
+1. Create a project at [supabase.com](https://supabase.com).
+2. Copy the connection string from Project Settings → Database → Connection string → **Transaction pooler** on port 6543. Replace `[YOUR-PASSWORD]` with the database password.
 
-### 3. Локальный запуск
+### 3. Local development
 
 ```bash
-cp .env.example .env   # заполнить TELEGRAM_BOT_TOKEN, DATABASE_URL
+cp .env.example .env   # fill in TELEGRAM_BOT_TOKEN and DATABASE_URL
 pnpm install
-pnpm db:migrate        # применить миграции
-pnpm dev               # long polling, без туннелей
+pnpm db:migrate        # apply migrations
+pnpm dev               # run long polling without a tunnel
 ```
 
-### 4. Группа
+### 4. Telegram group
 
-Создать группу, добавить бота (privacy mode уже выключен!). Бот поздоровается — каждому участнику нажать «✅ Я участвую». Дать боту права админа, чтобы он закрепил сообщение с балансом (или закрепить его сообщение вручную).
+Create a group and add the bot after disabling privacy mode. Each participant should press `✅ Я участвую`. Give the bot admin rights so it can pin the balance message, or pin that message manually.
 
 ### 5. Vercel
 
-1. Запушить репозиторий на GitHub, подключить к Vercel (Framework: Other).
-2. В Project Settings → Environment Variables добавить: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` (случайная строка 32+, например `openssl rand -hex 32`), `DATABASE_URL`, `CRON_SECRET` (для автосводки).
-3. Задеплоить.
+1. Push the repository to GitHub and connect it to Vercel with Framework set to Other.
+2. Add `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` (a random string of at least 32 characters, for example from `openssl rand -hex 32`), `DATABASE_URL`, and `CRON_SECRET` in Project Settings → Environment Variables.
+3. Deploy the project.
 
-### 6. Вебхук
-
-```bash
-# TELEGRAM_WEBHOOK_SECRET должен лежать и в .env, и в Vercel
-pnpm setwebhook https://<проект>.vercel.app/api/telegram
-```
-
-Проверка: написать в группу `67 кафе` — бот должен ответить балансом. Вернуться на long polling: `pnpm delwebhook && pnpm dev`.
-
-## Разработка
+### 6. Webhook
 
 ```bash
-pnpm typecheck && pnpm lint && pnpm test   # проверки
-pnpm db:generate                           # новая миграция после правки src/db/schema.ts
+# TELEGRAM_WEBHOOK_SECRET must be present in both .env and Vercel
+pnpm setwebhook https://<project>.vercel.app/api/telegram
 ```
 
-Деньги хранятся целыми числами в тетри (1 ₾ = 100). Каждый расход фиксирует снапшот участников дележа в `expense_shares` — изменение состава группы не пересчитывает историю. Удаление записей мягкое (`deleted_at`), кнопки под сообщениями работают бессрочно.
+To verify it, send `67 кафе` to the group and confirm that the bot replies with the balance. To return to local long polling, run `pnpm delwebhook && pnpm dev`.
+
+## Development
+
+```bash
+pnpm check         # typecheck, lint, tests, and formatting
+pnpm db:generate   # generate a migration after changing src/db/schema.ts
+```
+
+## Safe release process
+
+1. Create a logical snapshot with `pnpm db:backup`; `.backups/` is excluded from Git.
+2. Review and apply the migration with `pnpm db:migrate`.
+3. Deploy, then smoke-test adding, editing, and deleting an expense plus `/balance`, `/month`, and `/export`.
+4. Check the Telegram webhook and Supabase Security Advisor. If the release fails, roll back the Vercel deployment and forward-fix the database schema with another reviewed migration. Restore data from a snapshot only after a separate verification.
+
+The bot uses only a direct server-side Postgres connection. Tables in `public` are protected by RLS and are not intended for access through the Supabase Data API.
+
+Money is stored in integer minor units (1 ₾ = 100 tetri). Every expense records a snapshot of participating members in `expense_shares`, so later membership changes do not recalculate history. Records use soft deletion through `deleted_at`, and message buttons remain valid indefinitely.

@@ -25,7 +25,7 @@ export function computeNets(entries: BalanceEntry[]): Map<string, number> {
   return nets;
 }
 
-/** Жадное сведение нетто-балансов к минимальному списку переводов «кто кому сколько». */
+/** Greedily reduces net balances to a minimal list of transfers. */
 export function simplifyDebts(nets: Map<string, number>): Transfer[] {
   const byAmountDesc = (a: { amount: number }, b: { amount: number }) => b.amount - a.amount;
   const debtors = [...nets.entries()]

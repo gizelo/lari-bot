@@ -51,7 +51,7 @@ async function showCategoriesPanel(ctx: Context, edit: boolean): Promise<void> {
 categoriesComposer.command('categories', (ctx) => showCategoriesPanel(ctx, false));
 categoriesComposer.hears(/^категории$/iu, (ctx) => showCategoriesPanel(ctx, false));
 
-// Контекст force_reply кодируется прямо в тексте подсказки — состояние не нужно.
+// Encode force-reply context in the prompt so no separate state is required.
 export async function askForceReply(ctx: Context, prompt: string, code: string): Promise<void> {
   await ctx.reply(`${prompt}\n(код: ${code})`, { reply_markup: { force_reply: true } });
 }
@@ -81,8 +81,8 @@ categoriesComposer.callbackQuery('ca:list', async (ctx) => {
   await showCategoriesPanel(ctx, true);
 });
 
-async function categoryDetail(ctx: Context, id: string): Promise<void> {
-  const cat = await getCategory(id);
+async function categoryDetail(ctx: Context, householdId: string, id: string): Promise<void> {
+  const cat = await getCategory(householdId, id);
   if (!cat) return;
   const text = [
     `${cat.emoji ? `${cat.emoji} ` : ''}<b>${esc(cat.name)}</b>${cat.isArchived ? ' (в архиве)' : ''}`,
@@ -102,18 +102,21 @@ async function categoryDetail(ctx: Context, id: string): Promise<void> {
 
 categoriesComposer.callbackQuery(/^ca:e:(.+)$/, async (ctx) => {
   await ctx.answerCallbackQuery();
-  await categoryDetail(ctx, ctx.match[1]!);
+  const hh = await household(ctx);
+  await categoryDetail(ctx, hh.id, ctx.match[1]!);
 });
 
 categoriesComposer.callbackQuery(/^ca:rn:(.+)$/, async (ctx) => {
-  const cat = await getCategory(ctx.match[1]!);
+  const hh = await household(ctx);
+  const cat = await getCategory(hh.id, ctx.match[1]!);
   await ctx.answerCallbackQuery();
   if (!cat) return;
   await askForceReply(ctx, `Новое название для «${cat.name}»:`, `rn:${cat.id}`);
 });
 
 categoriesComposer.callbackQuery(/^ca:al:(.+)$/, async (ctx) => {
-  const cat = await getCategory(ctx.match[1]!);
+  const hh = await household(ctx);
+  const cat = await getCategory(hh.id, ctx.match[1]!);
   await ctx.answerCallbackQuery();
   if (!cat) return;
   await askForceReply(
@@ -124,31 +127,33 @@ categoriesComposer.callbackQuery(/^ca:al:(.+)$/, async (ctx) => {
 });
 
 categoriesComposer.callbackQuery(/^ca:em:(.+)$/, async (ctx) => {
-  const cat = await getCategory(ctx.match[1]!);
+  const hh = await household(ctx);
+  const cat = await getCategory(hh.id, ctx.match[1]!);
   await ctx.answerCallbackQuery();
   if (!cat) return;
   await askForceReply(ctx, `Emoji для «${cat.name}» (или «-», чтобы убрать):`, `em:${cat.id}`);
 });
 
 categoriesComposer.callbackQuery(/^ca:ar:(.+)$/, async (ctx) => {
-  const cat = await getCategory(ctx.match[1]!);
+  const hh = await household(ctx);
+  const cat = await getCategory(hh.id, ctx.match[1]!);
   if (!cat) {
     await ctx.answerCallbackQuery();
     return;
   }
-  await setCategoryArchived(cat.id, !cat.isArchived);
+  await setCategoryArchived(hh.id, cat.id, !cat.isArchived);
   await ctx.answerCallbackQuery({
     text: cat.isArchived ? 'Категория возвращена' : 'Категория в архиве',
   });
-  await categoryDetail(ctx, cat.id);
+  await categoryDetail(ctx, hh.id, cat.id);
 });
 
-// Ответы на force_reply-подсказки категорий; чужие коды пропускаем дальше по цепочке.
+// Handle category force replies and pass unrelated codes to the remaining middleware.
 categoriesComposer.on('message:text', async (ctx, next) => {
   const repliedText = ctx.message.reply_to_message?.text;
   const code = repliedText ? /\(код: ([^)]+)\)/.exec(repliedText)?.[1] : undefined;
   if (!code) return next();
-  const input = ctx.message.text.trim();
+  const input: string = ctx.message.text.trim();
 
   if (code === 'add') {
     const hh = await household(ctx);
@@ -162,23 +167,24 @@ categoriesComposer.on('message:text', async (ctx, next) => {
   const [action, id] = code.split(':');
   if (action !== 'rn' && action !== 'al' && action !== 'em') return next();
 
-  const cat = await getCategory(id!);
+  const hh = await household(ctx);
+  const cat = await getCategory(hh.id, id!);
   if (!cat) {
     await ctx.reply('Категория не найдена.');
     return;
   }
   if (action === 'rn') {
-    await renameCategory(cat.id, input);
+    await renameCategory(hh.id, cat.id, input);
     await ctx.reply(`«${cat.name}» → «${input}» ✅ Отображение обновилось во всей истории.`);
   } else if (action === 'al') {
     const aliases = input
       .split(',')
       .map((a) => a.trim().toLowerCase())
       .filter(Boolean);
-    await setCategoryAliases(cat.id, aliases);
+    await setCategoryAliases(hh.id, cat.id, aliases);
     await ctx.reply(`Алиасы «${cat.name}»: ${aliases.join(', ') || 'нет'} ✅`);
   } else {
-    await setCategoryEmoji(cat.id, input === '-' ? null : input.slice(0, 8));
+    await setCategoryEmoji(hh.id, cat.id, input === '-' ? null : input.slice(0, 8));
     await ctx.reply('Emoji обновлён ✅');
   }
 });

@@ -11,10 +11,10 @@ export type ParsedExpense = {
   amountMinor: number;
   spentOn: string;
   categoryId: string | null;
-  /** Токен совпал с несколькими категориями — записываем без категории, показываем кнопки. */
+  /** The token matched multiple categories; save without one and show category buttons. */
   ambiguousCategory: boolean;
   comment: string | null;
-  /** Сумма больше 100 000 ₾ — спросить подтверждение вместо молчаливой записи. */
+  /** Amounts above 100,000 ₾ require confirmation before affecting the balance. */
   needsConfirmation: boolean;
 };
 
@@ -40,11 +40,7 @@ function stripPunct(s: string): string {
  * Дата принимается только первым токеном. `дд.мм` без года считается датой лишь
  * когда дальше есть сумма — иначе `24.07 продукты` это расход на 24.07 ₾.
  */
-function parseLeadingDate(
-  token: string,
-  restHasAmount: boolean,
-  today: string,
-): string | null {
+function parseLeadingDate(token: string, restHasAmount: boolean, today: string): string | null {
   const keywordShift = DATE_KEYWORDS[normalize(token)];
   if (keywordShift !== undefined) return shiftDays(today, keywordShift);
 
@@ -118,7 +114,7 @@ export function parseExpense(
   const remaining = rest.filter((_, i) => i !== amountIndex);
   const match = matchCategory(remaining, categories);
 
-  // Неоднозначный токен остаётся в комментарии — это полезный контекст.
+  // Preserve an ambiguous token as a comment because it remains useful context.
   const commentTokens =
     match && !match.ambiguous ? remaining.filter((_, i) => i !== match.tokenIndex) : remaining;
   const comment = commentTokens.join(' ') || null;

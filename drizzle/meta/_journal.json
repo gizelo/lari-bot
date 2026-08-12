@@ -15,6 +15,13 @@
       "when": 1785655332467,
       "tag": "0001_fine_annihilus",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786543293449,
+      "tag": "0002_strong_spacker_dave",
+      "breakpoints": true
     }
   ]
 }

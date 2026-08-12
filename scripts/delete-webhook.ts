@@ -5,9 +5,9 @@ loadDotenv();
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 if (!token) {
-  console.error('Нужен TELEGRAM_BOT_TOKEN в env.');
+  console.error('TELEGRAM_BOT_TOKEN is required in the environment.');
   process.exit(1);
 }
 
 await new Api(token).deleteWebhook();
-console.log('Вебхук удалён — можно запускать pnpm dev (long polling).');
+console.log('Webhook deleted; pnpm dev can now use long polling.');

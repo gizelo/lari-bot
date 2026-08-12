@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 
-// Только для локальных entrypoint'ов (dev, scripts, seed) — на Vercel env приходит с платформы.
+// Local entrypoints load .env; Vercel injects environment variables at runtime.
 export function loadDotenv(): void {
   if (existsSync('.env')) {
     process.loadEnvFile('.env');

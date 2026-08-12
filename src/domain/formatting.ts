@@ -1,7 +1,7 @@
 import type { Transfer } from './balance.js';
 import { formatMoney } from './money.js';
 
-// Все сообщения бота — HTML parse mode; пользовательский текст всегда через esc().
+// All bot messages use HTML parse mode, so user-controlled text must pass through esc().
 export function esc(s: string): string {
   return s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
@@ -10,15 +10,12 @@ export type MemberNames = Map<string, string>;
 
 const name = (names: MemberNames, id: string) => esc(names.get(id) ?? '???');
 
-export function renderTransfers(
-  transfers: Transfer[],
-  names: MemberNames,
-  symbol: string,
-): string {
+export function renderTransfers(transfers: Transfer[], names: MemberNames, symbol: string): string {
   if (transfers.length === 0) return 'Вы в расчёте 🎉';
   return transfers
     .map(
-      (t) => `${name(names, t.fromId)} → ${name(names, t.toId)}: ${formatMoney(t.amountMinor, symbol)}`,
+      (t) =>
+        `${name(names, t.fromId)} → ${name(names, t.toId)}: ${formatMoney(t.amountMinor, symbol)}`,
     )
     .join('\n');
 }
