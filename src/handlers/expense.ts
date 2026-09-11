@@ -1,4 +1,4 @@
-import { Composer, InlineKeyboard, type Context } from 'grammy';
+import { Composer, InlineKeyboard, type Api, type Context } from 'grammy';
 import { config } from '../config.js';
 import { todayIn } from '../domain/dates.js';
 import { renderConfirmRequest } from '../domain/formatting.js';
@@ -9,6 +9,30 @@ import { createExpense, getExpenseRow, setReplyMessageId } from '../services/exp
 import { getOrCreateHousehold } from '../services/households.js';
 import { ensureMember, listActiveMembers, touchDisplayName } from '../services/members.js';
 import { renderExpenseMessage, toExpenseView, updatePinnedBalance } from '../services/render.js';
+
+type SendMessageOptions = Parameters<Api['sendMessage']>[2];
+
+export async function sendMessageWithReplyFallback(
+  api: Api,
+  chatId: number,
+  text: string,
+  replyToMessageId: number,
+  options: SendMessageOptions = {},
+) {
+  try {
+    return await api.sendMessage(chatId, text, {
+      ...options,
+      reply_parameters: { message_id: replyToMessageId },
+    });
+  } catch (error) {
+    const description =
+      typeof error === 'object' && error && 'description' in error
+        ? String(error.description)
+        : String(error);
+    if (!description.includes('message to be replied not found')) throw error;
+    return api.sendMessage(chatId, text, options);
+  }
+}
 
 export function displayName(from: { first_name: string; username?: string }): string {
   return from.first_name || from.username || 'Без имени';
@@ -70,11 +94,12 @@ export async function handleNewExpense(
 
   if (created.deletedAt) {
     const row = (await getExpenseRow(household.id, created.id))!;
-    const reply = await ctx.api.sendMessage(
+    const reply = await sendMessageWithReplyFallback(
+      ctx.api,
       chat.id,
       renderConfirmRequest(toExpenseView(row), config().CURRENCY_SYMBOL),
+      messageId,
       {
-        reply_parameters: { message_id: messageId },
         reply_markup: new InlineKeyboard()
           .text('✅ Да, всё верно', `ok:${created.id}`)
           .text('✖️ Отмена', `x:${created.id}`),
@@ -86,9 +111,8 @@ export async function handleNewExpense(
 
   const row = (await getExpenseRow(household.id, created.id))!;
   const { text: replyText, keyboard } = await renderExpenseMessage(row);
-  const reply = await ctx.api.sendMessage(chat.id, replyText, {
+  const reply = await sendMessageWithReplyFallback(ctx.api, chat.id, replyText, messageId, {
     parse_mode: 'HTML',
-    reply_parameters: { message_id: messageId },
     reply_markup: keyboard,
   });
   await setReplyMessageId(household.id, created.id, reply.message_id);
