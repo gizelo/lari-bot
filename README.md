@@ -2,7 +2,7 @@
 
 Record an expense with a single group message such as `67 кафе`. The bot replies with who owes whom and keeps a pinned message with the current balance. Expenses are split equally among participating members, and each group has an independent ledger.
 
-**Stack:** TypeScript, grammY, Drizzle ORM, Supabase Postgres, and Vercel Serverless webhooks.
+**Stack:** TypeScript, grammY, Drizzle ORM, Neon Postgres, and Vercel Serverless webhooks.
 
 ## Using the bot in a group
 
@@ -39,10 +39,13 @@ export - Export history as CSV
 help - Explain how to record expenses
 ```
 
-### 2. Supabase
+### 2. Neon
 
-1. Create a project at [supabase.com](https://supabase.com).
-2. Copy the connection string from Project Settings → Database → Connection string → **Transaction pooler** on port 6543. Replace `[YOUR-PASSWORD]` with the database password.
+1. Create a Free project at [neon.com](https://neon.com), using PostgreSQL 17 in AWS Frankfurt to match the Vercel region.
+2. Copy the pooled connection string into `DATABASE_URL` and the direct connection into `DATABASE_URL_UNPOOLED`. Keep TLS enabled (`sslmode=require`).
+3. Keep scale-to-zero enabled. Idle compute sleeps after five minutes and wakes automatically on a new connection. No keep-alive cron is needed.
+
+Free currently includes 0.5 GB of storage and 100 CU-hours per project per month. Monitor usage in the Neon console. Free instant restore covers only six hours; retain independent backups.
 
 ### 3. Local development
 
@@ -84,8 +87,10 @@ pnpm db:generate   # generate a migration after changing src/db/schema.ts
 1. Create a logical snapshot with `pnpm db:backup`; `.backups/` is excluded from Git.
 2. Review and apply the migration with `pnpm db:migrate`.
 3. Deploy, then smoke-test adding, editing, and deleting an expense plus `/balance`, `/month`, and `/export`.
-4. Check the Telegram webhook and Supabase Security Advisor. If the release fails, roll back the Vercel deployment and forward-fix the database schema with another reviewed migration. Restore data from a snapshot only after a separate verification.
+4. Check the Telegram webhook and Neon compute status. If the release fails, roll back the Vercel deployment and forward-fix the database schema with another reviewed migration. Restore data from a snapshot only after a separate verification.
 
-The bot uses only a direct server-side Postgres connection. Tables in `public` are protected by RLS and are not intended for access through the Supabase Data API.
+The bot uses only a direct server-side Postgres connection. Tables in `public` retain RLS. Neon Auth and the Data API are not enabled; the server uses its private database credentials. Historical Supabase privilege revocations are applied only where the Supabase roles exist.
+
+`pnpm db:backup` writes a consistent snapshot to the ignored `.backups/` directory with owner-only file permissions. Run it before migrations and retain a copy outside the database provider.
 
 Money is stored in integer minor units (1 ₾ = 100 tetri). Every expense records a snapshot of participating members in `expense_shares`, so later membership changes do not recalculate history. Records use soft deletion through `deleted_at`, and message buttons remain valid indefinitely.

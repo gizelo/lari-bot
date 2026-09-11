@@ -4,9 +4,7 @@ const envSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().min(1, 'TELEGRAM_BOT_TOKEN is required (BotFather -> /newbot)'),
   // Required only by the webhook and validated at the relevant entrypoints.
   TELEGRAM_WEBHOOK_SECRET: z.string().min(32).optional(),
-  DATABASE_URL: z
-    .string()
-    .min(1, 'DATABASE_URL is required (Supabase transaction pooler, port 6543)'),
+  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required (pooled PostgreSQL connection)'),
   // Vercel may inject TZ=':UTC', which Intl does not accept, so normalize and validate it.
   TZ: z
     .string()
